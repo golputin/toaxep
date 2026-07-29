@@ -30,7 +30,7 @@ const FEATURES = [
   },
   {
     k: "04",
-    t: "Live on-chain top-up",
+    t: "On-chain credits",
     d: "Buy $HOOD credits with native ETH on Robinhood Chain. Verified payments only.",
   },
 ];
