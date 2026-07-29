@@ -41,29 +41,31 @@ Open firewall **TCP 8787** (or put nginx/caddy TLS in front on 443).
 | `SERVE_STATIC` | leave `0` / unset |
 | `DAILY_FREE_CREDITS` | default 10 |
 
-## 2) Vercel — frontend only
+## Vercel frontend (blockearn.vercel.app / any project)
 
-1. Import GitHub repo `golputin/toaxep` (or this project).
-2. **Framework:** Vite  
-3. **Build:** `npm run build`  
-4. **Output:** `dist`  
-5. **Environment variable (Production):**
+`vercel.json` **rewrites** browser calls:
 
 ```
-VITE_API_BASE=http://YOUR_VPS_IP:8787
+Browser POST /api/chat  →  Vercel proxy  →  http://VPS:8787/api/chat
 ```
 
-Prefer HTTPS API later:
+So the UI can keep using **relative** `/api/...` (no mixed-content, no CORS pain).
+
+After pulling latest `main`, **Redeploy** on Vercel (Deployments → … → Redeploy).  
+Until redeploy, old `vercel.json` still serves `index.html` for POST → **405**.
+
+Optional override (skip proxy):
 
 ```
-VITE_API_BASE=https://api.yourdomain.com
+VITE_API_BASE=https://your-api-domain.com
 ```
 
-6. Redeploy after setting `VITE_API_BASE` (Vite bakes it at **build** time).
+## VPS API
 
-### Optional `vercel.json`
-
-Already in repo — SPA fallback to `index.html`. No serverless API on Vercel.
+```bash
+pm2 status openagent-api
+curl http://104.245.34.139:8787/api/health
+```
 
 ## 3) CORS
 

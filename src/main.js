@@ -5,9 +5,10 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
 /**
- * API base for split deploy:
- * - Vercel frontend → set VITE_API_BASE=https://YOUR_VPS:8787 (or https domain)
- * - Local vite with proxy → leave empty (same-origin /api → vite proxy)
+ * API base:
+ * - Production on Vercel: leave empty → same-origin `/api/*` rewritten to VPS (see vercel.json)
+ * - Override: VITE_API_BASE=https://api.example.com
+ * - Local vite: empty → vite.config.js proxies to :8787
  */
 const API_BASE = String(import.meta.env.VITE_API_BASE || "")
   .trim()
