@@ -154,7 +154,7 @@ export function renderLanding(root) {
         <a class="lp-btn primary xl" href="${esc(APP_HREF)}">Open HoodAgent</a>
         <a class="lp-btn ghost xl" href="#how">See how it works</a>
       </div>
-      <p class="lp-micro">10 free credits / day · Live ETH top-up · No email required</p>
+      <p class="lp-micro">10 free credits / day · Robinhood Chain · No email required</p>
     </section>
 
     <section class="lp-preview" aria-label="Product">

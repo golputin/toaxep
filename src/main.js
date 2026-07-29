@@ -591,7 +591,6 @@ function renderAgents(stage) {
 function renderShop(stage) {
   const shop = state.shop;
   const treasury = shop?.treasury || "";
-  const live = shop?.live !== false && !shop?.demoTopup;
   stage.innerHTML = `
     <div class="panel narrow">
       <h1>Buy Credits</h1>
@@ -600,7 +599,7 @@ function renderShop(stage) {
         <img src="/logo-hood-512.png" alt="$HOOD" width="72" height="72" />
         <div>
           <strong>$HOOD · HoodAgent</strong>
-          <p class="muted tiny" style="margin:6px 0 0">${live ? "Live on-chain top-up" : "Demo mode"} · ${ (shop?.creditsPerEth || 100000).toLocaleString() } credits / ETH</p>
+          <p class="muted tiny" style="margin:6px 0 0">${(shop?.creditsPerEth || 100000).toLocaleString()} credits / ETH · Robinhood Chain</p>
         </div>
       </div>
       <div class="shop-meta">
