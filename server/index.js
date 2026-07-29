@@ -312,7 +312,10 @@ app.use(
   cors({
     origin(origin, cb) {
       if (originAllowed(origin)) return cb(null, true);
-      return cb(new Error(`CORS blocked origin: ${origin}`));
+      // Never throw — throwing becomes Express 500 HTML via Vercel proxy.
+      // Just omit ACAO so browser blocks; API still returns JSON for same-origin/proxy.
+      console.warn(`[cors] blocked origin: ${origin || "(none)"}`);
+      return cb(null, false);
     },
     credentials: false,
     exposedHeaders: [
