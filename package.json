@@ -1,0 +1,25 @@
+{
+  "name": "openagent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wallet-gated AI chat agents — Opentroy-inspired (credits, catalog, RH top-up rail)",
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "node --watch server/index.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "NODE_ENV=production node server/index.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "vite": "^6.0.7"
+  }
+}
