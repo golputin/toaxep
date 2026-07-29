@@ -31,7 +31,7 @@ const PUBLIC_MODEL_LABEL = process.env.PUBLIC_MODEL_LABEL || "HoodAgent";
 const PUBLIC_PREMIUM_MODEL_LABEL = process.env.PUBLIC_PREMIUM_MODEL_LABEL || "Claude Opus 5";
 const PREMIUM_EXTRA_COST = Number(process.env.PREMIUM_EXTRA_COST || 2); // extra credits on top of agent cost
 const RH_CHAIN_ID = Number(process.env.RH_CHAIN_ID || 4663);
-const TREASURY = (process.env.TREASURY || "0xD086d53EFD295eF258D16B00D28f48bc23BA3aFe").toLowerCase();
+const TREASURY = (process.env.TREASURY || "0x9E5a4304D6800490608f813E8f27A6D8D2e95f88").toLowerCase();
 const RH_RPC = (process.env.RH_RPC || "https://rpc.mainnet.chain.robinhood.com").replace(/\/$/, "");
 const RH_EXPLORER = (process.env.RH_EXPLORER || "https://robinhoodchain.blockscout.com").replace(/\/$/, "");
 const ALLOW_DEMO_TOPUP = process.env.ALLOW_DEMO_TOPUP === "1";
