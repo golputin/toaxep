@@ -26,6 +26,7 @@ const state = {
   sidebarOpen: typeof window !== "undefined" ? window.innerWidth > 800 : true,
   view: "chat", // chat | agents | shop
   agentId: localStorage.getItem("oa_agent") || "general",
+  modelTier: localStorage.getItem("oa_model_tier") || "standard", // standard | premium
   agents: AGENTS_FALLBACK,
   threads: loadThreads(),
   activeThread: null,
@@ -168,12 +169,18 @@ function disconnectWallet() {
 }
 
 async function refreshCredits() {
-  if (!state.wallet) return;
+  if (!state.wallet) {
+    state.credits = null;
+    return;
+  }
   try {
     state.credits = await api("/api/v1/credits");
-    renderCredits();
-  } catch (e) {
-    console.warn(e);
+    if (state.modelTier === "premium" && !canUsePremium()) {
+      state.modelTier = "standard";
+      localStorage.setItem("oa_model_tier", "standard");
+    }
+  } catch {
+    /* ignore */
   }
 }
 
@@ -192,6 +199,29 @@ async function loadShop() {
   } catch {
     state.shop = null;
   }
+}
+
+function purchasedCredits() {
+  const c = state.credits || {};
+  return Number(c.purchased_credits ?? c.purchased ?? 0) || 0;
+}
+
+function canUsePremium() {
+  if (state.credits?.can_use_premium === true) return true;
+  return purchasedCredits() > 0;
+}
+
+function setModelTier(tier) {
+  const next = tier === "premium" ? "premium" : "standard";
+  if (next === "premium" && !canUsePremium()) {
+    toast("Claude Opus 5 unlocks after top-up");
+    state.view = "shop";
+    render();
+    return;
+  }
+  state.modelTier = next;
+  localStorage.setItem("oa_model_tier", next);
+  render();
 }
 
 // ——— chat ———
@@ -224,7 +254,8 @@ async function sendMessage(text) {
       method: "POST",
       body: JSON.stringify({
         agentId: t.agentId || state.agentId,
-        // only send clean turns — never re-send error bubbles to the model
+        premium: state.modelTier === "premium",
+        model: state.modelTier === "premium" ? "opus" : "standard",
         messages: t.messages
           .filter((m) => !m.pending && !m.error)
           .filter((m) => m.role === "user" || (m.role === "assistant" && !String(m.content).startsWith("⚠️")))
@@ -256,12 +287,20 @@ async function sendMessage(text) {
     const msg =
       e.status === 402
         ? e.message + " — open Buy Credits."
-        : e.status === 401
-          ? "Connect wallet to chat."
-          : "Something went wrong. Try again in a moment.";
+        : e.status === 403
+          ? e.message || "Claude Opus 5 is for top-up users."
+          : e.status === 401
+            ? "Connect wallet to chat."
+            : "Something went wrong. Try again in a moment.";
     t.messages.push({ role: "assistant", content: `⚠️ ${msg}`, error: true });
     saveThreads();
-    if (e.status === 402) state.view = "shop";
+    if (e.status === 402 || e.status === 403) {
+      if (e.status === 403) {
+        state.modelTier = "standard";
+        localStorage.setItem("oa_model_tier", "standard");
+      }
+      state.view = "shop";
+    }
   } finally {
     state.busy = false;
     render();
@@ -594,7 +633,7 @@ function renderShop(stage) {
   stage.innerHTML = `
     <div class="panel narrow">
       <h1>Buy Credits</h1>
-      <p class="muted">Pay <b>native ETH</b> on <b>Robinhood Chain</b> (chain ${shop?.chainId || 4663}) to the treasury. Credits credit automatically after confirmation.</p>
+      <p class="muted">Pay <b>native ETH</b> on <b>Robinhood Chain</b> (chain ${shop?.chainId || 4663}) to the treasury. Top-up unlocks <b>Claude Opus 5</b>.</p>
       <div class="shop-hero">
         <img src="/logo-hood-512.png" alt="$HOOD" width="72" height="72" />
         <div>
@@ -679,7 +718,7 @@ function renderChat(stage) {
           ? `<div class="hero" id="hero">
               <img class="hero-token" src="/logo-hood-512.png" width="88" height="88" alt="$HOOD" />
               <h1>How can I help you today?</h1>
-              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · ${agent?.creditCost ?? 1} credit / message · <b>$HOOD</b> credits</p>
+              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · model <b>${state.modelTier === "premium" ? "Claude Opus 5" : "Standard"}</b> · ${agent?.creditCost ?? 1}+ cr · <b>$HOOD</b></p>
               <div class="suggestions">
                 <button type="button" data-sug="Summarize the risks of wallet-gated AI credit systems.">Credit system risks</button>
                 <button type="button" data-sug="Write a sharp product brief for an on-chain agent marketplace.">Agent marketplace brief</button>
@@ -694,6 +733,9 @@ function renderChat(stage) {
         }" ${state.wallet ? "" : "disabled"}></textarea>
         <div class="composer-bar">
           <button type="button" class="chip" id="chip-agent">${escapeHtml(agent?.name || "Agent")}</button>
+          <button type="button" class="chip ${state.modelTier === "premium" ? "chip-premium" : ""}" id="chip-model" title="${canUsePremium() ? "Toggle model" : "Top up to unlock Claude Opus 5"}">
+            ${state.modelTier === "premium" ? "Claude Opus 5" : "Standard"}
+          </button>
           <div class="grow"></div>
           <button type="submit" class="btn primary" id="btn-send" ${
             !state.wallet || state.busy ? "disabled" : ""
@@ -705,6 +747,10 @@ function renderChat(stage) {
   $("#chip-agent")?.addEventListener("click", () => {
     state.view = "agents";
     render();
+  });
+  $("#chip-model")?.addEventListener("click", () => {
+    if (state.modelTier === "premium") setModelTier("standard");
+    else setModelTier("premium");
   });
   $$("[data-sug]").forEach((b) =>
     b.addEventListener("click", () => sendMessage(b.getAttribute("data-sug")))

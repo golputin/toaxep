@@ -25,10 +25,13 @@ const DAILY = Number(process.env.DAILY_FREE_CREDITS || 10);
 const LLM_URL = (process.env.LLM_API_URL || "https://api.inferhub.dev/v1").replace(/\/$/, "");
 const LLM_KEY = process.env.LLM_API_KEY || "";
 const LLM_MODEL = process.env.LLM_MODEL || "free/grok/grok-4.5";
-// Public label only — never leak provider/model ids to the browser
+const LLM_MODEL_PREMIUM = process.env.LLM_MODEL_PREMIUM || "cb/claude-opus-4.6";
+// Public labels only — never leak provider/model ids to the browser
 const PUBLIC_MODEL_LABEL = process.env.PUBLIC_MODEL_LABEL || "HoodAgent";
+const PUBLIC_PREMIUM_MODEL_LABEL = process.env.PUBLIC_PREMIUM_MODEL_LABEL || "Claude Opus 5";
+const PREMIUM_EXTRA_COST = Number(process.env.PREMIUM_EXTRA_COST || 2); // extra credits on top of agent cost
 const RH_CHAIN_ID = Number(process.env.RH_CHAIN_ID || 4663);
-const TREASURY = (process.env.TREASURY || "0x1b04BEB50C40dF7E5EFdBf91c5D876E94666603D").toLowerCase();
+const TREASURY = (process.env.TREASURY || "0xD086d53EFD295eF258D16B00D28f48bc23BA3aFe").toLowerCase();
 const RH_RPC = (process.env.RH_RPC || "https://rpc.mainnet.chain.robinhood.com").replace(/\/$/, "");
 const RH_EXPLORER = (process.env.RH_EXPLORER || "https://robinhoodchain.blockscout.com").replace(/\/$/, "");
 const ALLOW_DEMO_TOPUP = process.env.ALLOW_DEMO_TOPUP === "1";
@@ -209,6 +212,14 @@ async function verifyTopupTx({ txHash, from, minWei }) {
   return { ok: true, valueWei: value, blockNumber: receipt.blockNumber };
 }
 
+function spendPurchased(u, cost) {
+  const need = Math.max(0, Math.floor(Number(cost) || 0));
+  if (need <= 0) return true;
+  if ((u.purchased || 0) < need) return false;
+  u.purchased = (u.purchased || 0) - need;
+  return true;
+}
+
 function spend(u, cost) {
   const b = balanceOf(u);
   if (b.remaining < cost) return false;
@@ -355,6 +366,8 @@ app.get("/api/health", (_req, res) => {
     service: "hoodagent",
     // do not expose real model id / provider
     model: PUBLIC_MODEL_LABEL,
+    premiumModel: PUBLIC_PREMIUM_MODEL_LABEL,
+    premiumRequiresTopup: true,
     ready: Boolean(LLM_KEY),
     chainId: RH_CHAIN_ID,
     dailyFree: DAILY,
@@ -392,6 +405,8 @@ app.get("/api/v1/credits", (req, res) => {
     daily_limit: b.dailyLimit,
     purchased_credits: b.purchased,
     free_left: b.freeLeft,
+    can_use_premium: b.purchased > 0,
+    premium_model: PUBLIC_PREMIUM_MODEL_LABEL,
     resets_at: new Date(
       Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1, 0, 0, 0)
     ).toISOString(),
@@ -534,6 +549,13 @@ app.get("/api/shop", (_req, res) => {
     demoTopup: ALLOW_DEMO_TOPUP,
     live: !ALLOW_DEMO_TOPUP,
     token: { symbol: "HOOD", name: "HoodAgent" },
+    premiumModel: {
+      id: "opus",
+      label: PUBLIC_PREMIUM_MODEL_LABEL,
+      requiresPurchased: true,
+      extraCost: PREMIUM_EXTRA_COST,
+      blurb: "Top-up unlock. Uses purchased credits only.",
+    },
     packs: [
       { eth: 0.001, label: "Starter" },
       { eth: 0.005, label: "Builder" },
@@ -572,11 +594,43 @@ app.post("/api/chat", async (req, res) => {
   const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
   const agentId = String(req.body?.agentId || "general");
   const agent = AGENTS.find((a) => a.id === agentId) || AGENTS[0];
-  const cost = COST[agent.mode] || 1;
+  const baseCost = COST[agent.mode] || 1;
+
+  // Premium model (public label "Claude Opus 5") — top-up users only
+  const wantPremium =
+    req.body?.premium === true ||
+    req.body?.model === "opus" ||
+    String(req.body?.modelTier || "").toLowerCase() === "premium";
 
   const ledger = loadLedger();
   const u = ensureUser(ledger, addr);
   const before = balanceOf(u);
+
+  if (wantPremium && before.purchased <= 0) {
+    saveLedger(ledger);
+    return res.status(403).json({
+      error: {
+        code: "premium_locked",
+        message: `${PUBLIC_PREMIUM_MODEL_LABEL} is for top-up users. Buy credits to unlock.`,
+        premiumModel: PUBLIC_PREMIUM_MODEL_LABEL,
+      },
+    });
+  }
+
+  // Premium burns agent cost + extra, and must be payable from purchased balance
+  const cost = wantPremium ? baseCost + PREMIUM_EXTRA_COST : baseCost;
+  if (wantPremium && before.purchased < cost) {
+    saveLedger(ledger);
+    return res.status(402).json({
+      error: {
+        code: "credits_exhausted",
+        message: `${PUBLIC_PREMIUM_MODEL_LABEL} needs ${cost} purchased credit(s). You have ${before.purchased} purchased.`,
+        cost,
+        purchased: before.purchased,
+        remaining: before.remaining,
+      },
+    });
+  }
   if (before.remaining < cost) {
     saveLedger(ledger);
     return res.status(402).json({
@@ -588,6 +642,9 @@ app.post("/api/chat", async (req, res) => {
       },
     });
   }
+
+  const selectedModel = wantPremium ? LLM_MODEL_PREMIUM : LLM_MODEL;
+  const publicModelLabel = wantPremium ? PUBLIC_PREMIUM_MODEL_LABEL : PUBLIC_MODEL_LABEL;
 
   const userMsgs = messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
@@ -614,7 +671,7 @@ app.post("/api/chat", async (req, res) => {
     "If you lack live market data, say so briefly without inventing prices.";
 
   const payload = {
-    model: LLM_MODEL,
+    model: selectedModel,
     messages: [{ role: "system", content: agent.system + systemExtra }, ...userMsgs],
     temperature: 0.7,
     max_tokens: 2048,
@@ -660,7 +717,8 @@ app.post("/api/chat", async (req, res) => {
   const content =
     data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "(empty model response)";
 
-  if (!spend(u, cost)) {
+  const spent = wantPremium ? spendPurchased(u, cost) : spend(u, cost);
+  if (!spent) {
     saveLedger(ledger);
     return res.status(402).json({
       error: { code: "credits_exhausted", message: "Out of credits." },
@@ -669,11 +727,13 @@ app.post("/api/chat", async (req, res) => {
   saveLedger(ledger);
   const after = balanceOf(u);
 
-  // Minimal client payload — hide model id, usage, agent plumbing in Network tab
+  // Minimal client payload — hide provider model ids; show public labels only
   res.json({
     ok: true,
     text: content,
     credits: after.remaining,
+    model: publicModelLabel,
+    premium: !!wantPremium,
     // keep nested message for older clients briefly
     message: { role: "assistant", content },
   });

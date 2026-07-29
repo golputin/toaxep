@@ -393,6 +393,13 @@ body.landing-mode #app {
   padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--muted);
 }
 .chip:hover { color: var(--text); border-color: var(--lime); }
+.chip-premium {
+  color: #0a0c08 !important;
+  background: linear-gradient(135deg, #d9f99d, #a3e635) !important;
+  border-color: #a3e635 !important;
+  font-weight: 600;
+  box-shadow: 0 0 16px rgba(163, 230, 53, 0.25);
+}
 
 #toasts {
   position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
