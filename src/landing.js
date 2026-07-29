@@ -117,7 +117,7 @@ export function renderLanding(root) {
 
     <header class="lp-nav">
       <a class="lp-brand" href="/">
-        <img src="/token-hood.svg" width="32" height="32" alt="" />
+        <img src="/logo-hood-512.png" width="32" height="32" alt="" />
         <span>HoodAgent</span>
         <em>$HOOD</em>
       </a>
@@ -144,6 +144,7 @@ export function renderLanding(root) {
 
     <section class="lp-hero">
       <div class="lp-pill"><span class="dot"></span> Live on Robinhood Chain</div>
+      <img class="lp-hero-logo" src="/logo-hood-512.png" width="120" height="120" alt="HoodAgent" />
       <h1>Where AI agents<br/><span class="grad">get real work done.</span></h1>
       <p class="lp-lead">
         Wallet-gated agents. Metered <strong>$HOOD</strong> credits.
@@ -259,7 +260,7 @@ export function renderLanding(root) {
 
     <footer class="lp-foot">
       <div class="lp-foot-brand">
-        <img src="/token-hood.svg" width="28" height="28" alt="" />
+        <img src="/logo-hood-512.png" width="28" height="28" alt="" />
         <div>
           <strong>HoodAgent</strong>
           <span>Wallet · credits · agents · $HOOD</span>

@@ -72,6 +72,14 @@ body.landing-mode {
   font-weight: 600;
   letter-spacing: -0.02em;
 }
+.lp-brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 0 16px rgba(163, 230, 53, 0.25);
+  background: #030712;
+}
 .lp-brand em {
   font-style: normal;
   font-size: 11px;
@@ -152,6 +160,18 @@ body.landing-mode {
   margin: 0 auto;
   padding: 72px 24px 40px;
   text-align: center;
+}
+.lp-hero-logo {
+  width: 120px;
+  height: 120px;
+  border-radius: 28px;
+  object-fit: cover;
+  margin: 0 auto 22px;
+  display: block;
+  box-shadow:
+    0 0 0 1px rgba(163, 230, 53, 0.35),
+    0 0 48px rgba(163, 230, 53, 0.28);
+  background: #030712;
 }
 .lp-pill {
   display: inline-flex;
@@ -508,6 +528,13 @@ body.landing-mode {
   align-items: center;
   margin-bottom: 28px;
 }
+.lp-foot-brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 0 14px rgba(163, 230, 53, 0.2);
+}
 .lp-foot-brand strong { display: block; }
 .lp-foot-brand span { color: #6b7a68; font-size: 13px; }
 .lp-foot-cols {
@@ -563,6 +590,12 @@ body.landing-mode {
   .lp-section { padding: 48px 16px; }
   .lp-hero {
     padding: 48px 16px 28px;
+  }
+  .lp-hero-logo {
+    width: 88px;
+    height: 88px;
+    border-radius: 22px;
+    margin-bottom: 16px;
   }
   .lp-hero h1 {
     font-size: clamp(1.85rem, 9vw, 2.6rem);

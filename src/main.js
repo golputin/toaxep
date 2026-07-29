@@ -424,7 +424,7 @@ function render() {
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <a href="/" class="brand-home" title="Marketing site">
-            <div class="brand-mark"><img src="/token-hood.svg" alt="$HOOD" width="36" height="36" /></div>
+            <div class="brand-mark"><img src="/logo-hood-512.png" alt="$HOOD" width="36" height="36" /></div>
             <div class="brand-text">
               <strong>HoodAgent</strong>
               <small>wallet · credits · agents</small>
@@ -597,7 +597,7 @@ function renderShop(stage) {
       <h1>Buy Credits</h1>
       <p class="muted">Pay <b>native ETH</b> on <b>Robinhood Chain</b> (chain ${shop?.chainId || 4663}) to the treasury. Credits credit automatically after confirmation.</p>
       <div class="shop-hero">
-        <img src="/token-hood.svg" alt="$HOOD" width="72" height="72" />
+        <img src="/logo-hood-512.png" alt="$HOOD" width="72" height="72" />
         <div>
           <strong>$HOOD · HoodAgent</strong>
           <p class="muted tiny" style="margin:6px 0 0">${live ? "Live on-chain top-up" : "Demo mode"} · ${ (shop?.creditsPerEth || 100000).toLocaleString() } credits / ETH</p>
@@ -678,7 +678,7 @@ function renderChat(stage) {
       ${
         empty
           ? `<div class="hero" id="hero">
-              <img class="hero-token" src="/token-hood.svg" width="88" height="88" alt="$HOOD" />
+              <img class="hero-token" src="/logo-hood-512.png" width="88" height="88" alt="$HOOD" />
               <h1>How can I help you today?</h1>
               <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · ${agent?.creditCost ?? 1} credit / message · <b>$HOOD</b> credits</p>
               <div class="suggestions">
