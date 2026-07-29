@@ -674,7 +674,6 @@ function renderChat(stage) {
 
   stage.innerHTML = `
     <div class="chat">
-      ""
       <div class="messages" id="messages"></div>
       ${
         empty
@@ -704,8 +703,6 @@ function renderChat(stage) {
       </form>
     </div>`;
 
-      render();
-  });
   $("#chip-agent")?.addEventListener("click", () => {
     state.view = "agents";
     render();
