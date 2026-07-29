@@ -32,8 +32,8 @@ const state = {
   credits: null,
   shop: null,
   busy: false,
-  previewDismissed: localStorage.getItem("oa_preview_dismissed") === "1",
   apiBase: API_BASE || "(same-origin / vite proxy)",
+  topupBusy: false,
 };
 
 function isMobile() {
@@ -270,22 +270,127 @@ async function sendMessage(text) {
   }
 }
 
-async function demoTopup(eth) {
-  if (!state.wallet) return toast("Connect wallet first");
+const RH_CHAIN = {
+  chainId: "0x1237", // 4663
+  chainName: "Robinhood Chain",
+  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+  rpcUrls: ["https://rpc.mainnet.chain.robinhood.com"],
+  blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
+};
+
+function toHexChainId(id) {
+  return "0x" + Number(id).toString(16);
+}
+
+function ethToWeiHex(eth) {
+  const s = String(eth);
+  if (!/^\d+(\.\d+)?$/.test(s)) throw new Error("Invalid amount");
+  const [a, b = ""] = s.split(".");
+  const frac = (b + "0".repeat(18)).slice(0, 18);
+  const wei = BigInt(a) * 10n ** 18n + BigInt(frac);
+  return "0x" + wei.toString(16);
+}
+
+async function ensureRhChain() {
+  const eth = window.ethereum;
+  if (!eth) throw new Error("No wallet extension. Install MetaMask / Rabby, or paste address for view-only.");
+  const want = toHexChainId(state.shop?.chainId || 4663);
   try {
-    const d = await api("/api/credits/verify", {
-      method: "POST",
-      body: JSON.stringify({
-        ethAmount: eth,
-        txHash: `demo:${Date.now()}`,
-        walletAddress: state.wallet,
-      }),
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: want }],
     });
-    toast(`+${d.credits_granted} credits added (demo)`);
+  } catch (e) {
+    if (e?.code === 4902 || String(e?.message || "").toLowerCase().includes("Unrecognized chain")) {
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: want,
+          chainName: state.shop?.chainName || RH_CHAIN.chainName,
+          nativeCurrency: RH_CHAIN.nativeCurrency,
+          rpcUrls: [state.shop?.rpcUrl || RH_CHAIN.rpcUrls[0]],
+          blockExplorerUrls: [state.shop?.explorer || RH_CHAIN.blockExplorerUrls[0]],
+        }],
+      });
+    } else if (e?.code === 4001) {
+      throw new Error("Chain switch rejected");
+    } else {
+      throw e;
+    }
+  }
+}
+
+async function buyCredits(eth) {
+  if (!state.wallet) return toast("Connect wallet first");
+  if (state.topupBusy) return;
+  const shop = state.shop;
+  const treasury = shop?.treasury;
+  if (!treasury || /^0x0{40}$/i.test(treasury)) {
+    return toast("Treasury not configured");
+  }
+
+  // View-only (pasted address, no extension): cannot send tx
+  if (!window.ethereum) {
+    return toast("Install a wallet extension to top up on-chain");
+  }
+
+  state.topupBusy = true;
+  try {
+    await ensureRhChain();
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const from = String(accounts[0] || "").toLowerCase();
+    if (from !== state.wallet.toLowerCase()) {
+      // sync connected account
+      state.wallet = from;
+      localStorage.setItem("oa_wallet", from);
+    }
+    const value = ethToWeiHex(eth);
+    toast(`Confirm ${eth} ETH top-up in wallet…`);
+    const txHash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from,
+        to: treasury,
+        value,
+        // native transfer
+      }],
+    });
+    toast("Payment sent — verifying on-chain…");
+    // poll verify a few times (receipt lag)
+    let lastErr = null;
+    let data = null;
+    for (let i = 0; i < 12; i++) {
+      try {
+        data = await api("/api/credits/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            ethAmount: eth,
+            txHash,
+            walletAddress: from,
+          }),
+        });
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        const code = e?.data?.error?.code || "";
+        if (["pending", "not_found"].includes(code) || e.status === 400) {
+          await new Promise((r) => setTimeout(r, 2500));
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!data) throw lastErr || new Error("Verify timeout — open Buy Credits and retry with tx hash");
+    toast(`+${data.credits_granted} HOOD credits added`);
     await refreshCredits();
     render();
   } catch (e) {
-    toast(e.message);
+    const msg = e?.message || String(e);
+    if (e?.code === 4001 || /rejected|denied/i.test(msg)) toast("Transaction rejected");
+    else toast(msg.replace(/^Error:\s*/, ""));
+  } finally {
+    state.topupBusy = false;
   }
 }
 
@@ -319,11 +424,11 @@ function render() {
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <a href="/" class="brand-home" title="Marketing site">
-            <div class="brand-mark"><img src="/token-oagt.svg" alt="$OAGT" width="36" height="36" /></div>
+            <div class="brand-mark"><img src="/token-hood.svg" alt="$HOOD" width="36" height="36" /></div>
             <div class="brand-text">
-              <strong>OpenAgent</strong>
+              <strong>HoodAgent</strong>
               <small>wallet · credits · agents</small>
-              <span class="token-chip">$OAGT</span>
+              <span class="token-chip">$HOOD</span>
             </div>
           </a>
           <button type="button" class="icon-btn" id="btn-collapse" title="Close menu" aria-label="Close menu">‹</button>
@@ -347,7 +452,7 @@ function render() {
       <main class="main">
         <header class="top">
           <button type="button" class="icon-btn mobile-only" id="btn-menu" aria-label="Open menu">☰</button>
-          <div class="top-title mobile-only">OpenAgent</div>
+          <div class="top-title mobile-only">HoodAgent</div>
           <div class="grow"></div>
           <div class="credits-pill" id="credits-pill">—</div>
           ${
@@ -485,26 +590,32 @@ function renderAgents(stage) {
 
 function renderShop(stage) {
   const shop = state.shop;
+  const treasury = shop?.treasury || "";
+  const live = shop?.live !== false && !shop?.demoTopup;
   stage.innerHTML = `
     <div class="panel narrow">
       <h1>Buy Credits</h1>
-      <p class="muted">Top up with native ETH on <b>Robinhood Chain</b> (${shop?.chainId || 4663}). Demo grant enabled for local dev.</p>
+      <p class="muted">Pay <b>native ETH</b> on <b>Robinhood Chain</b> (chain ${shop?.chainId || 4663}) to the treasury. Credits credit automatically after confirmation.</p>
       <div class="shop-hero">
-        <img src="/token-oagt.svg" alt="$OAGT" width="72" height="72" />
+        <img src="/token-hood.svg" alt="$HOOD" width="72" height="72" />
         <div>
-          <strong>$OAGT · OpenAgent</strong>
-          <p class="muted tiny" style="margin:6px 0 0">Credits power agent messages. Token mark is product branding (not a live claim of on-chain listing).</p>
+          <strong>$HOOD · HoodAgent</strong>
+          <p class="muted tiny" style="margin:6px 0 0">${live ? "Live on-chain top-up" : "Demo mode"} · ${ (shop?.creditsPerEth || 100000).toLocaleString() } credits / ETH</p>
         </div>
       </div>
       <div class="shop-meta">
         <div><span>Rate</span><b>${(shop?.creditsPerEth || 100000).toLocaleString()} cr / ETH</b></div>
-        <div><span>Treasury</span><b class="mono">${shortAddr(shop?.treasury || "0x0")}</b></div>
+        <div><span>Min</span><b>${shop?.minEth ?? 0.001} ETH</b></div>
+        <div style="grid-column:1/-1"><span>Treasury</span>
+          <b class="mono" style="word-break:break-all;font-size:11px">${escapeHtml(treasury || "—")}</b>
+          ${treasury ? `<button type="button" class="btn ghost" id="btn-copy-treasury" style="margin-top:8px">Copy address</button>` : ""}
+        </div>
       </div>
       <div class="packs">
-        ${(shop?.packs || [{ eth: 0.005, credits: 500, label: "Starter" }, { eth: 0.01, credits: 1000, label: "Builder" }])
+        ${(shop?.packs || [{ eth: 0.001, credits: 100, label: "Starter" }, { eth: 0.005, credits: 500, label: "Builder" }])
           .map(
             (p) => `
-          <button type="button" class="pack" data-eth="${p.eth}">
+          <button type="button" class="pack" data-eth="${p.eth}" ${state.topupBusy ? "disabled" : ""}>
             <strong>${escapeHtml(p.label || "Pack")}</strong>
             <span>${p.eth} ETH</span>
             <b>+${p.credits} credits</b>
@@ -512,11 +623,48 @@ function renderShop(stage) {
           )
           .join("")}
       </div>
-      <p class="tiny muted">Production: verify tx receipt to treasury via RPC. This build uses <code>demo:</code> top-up for testing.</p>
+      <div class="manual-topup" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+        <p class="tiny muted" style="margin:0 0 8px">Already paid? Paste tx hash to claim credits.</p>
+        <form id="form-claim" style="display:flex;flex-direction:column;gap:8px">
+          <input id="claim-eth" type="text" inputmode="decimal" placeholder="ETH amount (e.g. 0.005)" style="padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:inherit" />
+          <input id="claim-tx" type="text" placeholder="0x… transaction hash" style="padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:inherit;font-family:IBM Plex Mono,monospace;font-size:12px" />
+          <button type="submit" class="btn primary" ${state.topupBusy ? "disabled" : ""}>Verify & credit</button>
+        </form>
+        ${shop?.explorer ? `<p class="tiny muted" style="margin-top:10px"><a href="${escapeHtml(shop.explorer)}" target="_blank" rel="noopener" style="color:var(--lime)">Explorer</a></p>` : ""}
+      </div>
     </div>`;
   $$(".pack", stage).forEach((b) =>
-    b.addEventListener("click", () => demoTopup(Number(b.getAttribute("data-eth"))))
+    b.addEventListener("click", () => buyCredits(Number(b.getAttribute("data-eth"))))
   );
+  $("#btn-copy-treasury")?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(treasury);
+      toast("Treasury copied");
+    } catch {
+      toast(treasury);
+    }
+  });
+  $("#form-claim")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.wallet) return toast("Connect wallet first");
+    const eth = Number($("#claim-eth")?.value || 0);
+    const txHash = String($("#claim-tx")?.value || "").trim();
+    if (!eth || !txHash) return toast("Enter ETH amount and tx hash");
+    state.topupBusy = true;
+    try {
+      const d = await api("/api/credits/verify", {
+        method: "POST",
+        body: JSON.stringify({ ethAmount: eth, txHash, walletAddress: state.wallet }),
+      });
+      toast(`+${d.credits_granted} HOOD credits added`);
+      await refreshCredits();
+      render();
+    } catch (err) {
+      toast(err.message || "Claim failed");
+    } finally {
+      state.topupBusy = false;
+    }
+  });
 }
 
 function renderChat(stage) {
@@ -526,21 +674,14 @@ function renderChat(stage) {
 
   stage.innerHTML = `
     <div class="chat">
-      ${
-        !state.previewDismissed
-          ? `<div class="banner">
-              <span>Preview build — OpenAgent (Opentroy-inspired). Not affiliated with Opentroy.</span>
-              <button type="button" id="dismiss-preview">Dismiss</button>
-            </div>`
-          : ""
-      }
+      ""
       <div class="messages" id="messages"></div>
       ${
         empty
           ? `<div class="hero" id="hero">
-              <img class="hero-token" src="/token-oagt.svg" width="88" height="88" alt="$OAGT" />
+              <img class="hero-token" src="/token-hood.svg" width="88" height="88" alt="$HOOD" />
               <h1>How can I help you today?</h1>
-              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · ${agent?.creditCost ?? 1} credit / message · <b>$OAGT</b> credits</p>
+              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · ${agent?.creditCost ?? 1} credit / message · <b>$HOOD</b> credits</p>
               <div class="suggestions">
                 <button type="button" data-sug="Summarize the risks of wallet-gated AI credit systems.">Credit system risks</button>
                 <button type="button" data-sug="Write a sharp product brief for an on-chain agent marketplace.">Agent marketplace brief</button>
@@ -563,10 +704,7 @@ function renderChat(stage) {
       </form>
     </div>`;
 
-  $("#dismiss-preview")?.addEventListener("click", () => {
-    state.previewDismissed = true;
-    localStorage.setItem("oa_preview_dismissed", "1");
-    render();
+      render();
   });
   $("#chip-agent")?.addEventListener("click", () => {
     state.view = "agents";
@@ -605,7 +743,7 @@ function renderMessages() {
     .map(
       (m) => `
     <div class="msg ${m.role} ${m.error ? "err" : ""} ${m.pending ? "pending" : ""}">
-      <div class="role">${m.role === "user" ? "You" : "OpenAgent"}</div>
+      <div class="role">${m.role === "user" ? "You" : "HoodAgent"}</div>
       <div class="body">${formatMsg(m.content)}</div>
     </div>`
     )
@@ -651,7 +789,7 @@ function escapeHtml(s) {
   }
 
   // normalize bare /app → keep path for refresh
-  document.title = "OpenAgent — App";
+  document.title = "HoodAgent";
 
   await Promise.all([loadAgents(), loadShop()]);
   if (state.wallet) await refreshCredits();

@@ -1,5 +1,5 @@
 /**
- * OpenAgent API — chat proxy + wallet credits ledger
+ * HoodAgent API — chat proxy + wallet credits ledger
  * Inspired by Opentroy: wallet gate, daily free credits, paid top-up rail (RH)
  */
 import dotenv from "dotenv";
@@ -26,11 +26,14 @@ const LLM_URL = (process.env.LLM_API_URL || "https://api.inferhub.dev/v1").repla
 const LLM_KEY = process.env.LLM_API_KEY || "";
 const LLM_MODEL = process.env.LLM_MODEL || "free/grok/grok-4.5";
 // Public label only — never leak provider/model ids to the browser
-const PUBLIC_MODEL_LABEL = process.env.PUBLIC_MODEL_LABEL || "OpenAgent";
+const PUBLIC_MODEL_LABEL = process.env.PUBLIC_MODEL_LABEL || "HoodAgent";
 const RH_CHAIN_ID = Number(process.env.RH_CHAIN_ID || 4663);
-const TREASURY = process.env.TREASURY || "0x0000000000000000000000000000000000000000";
+const TREASURY = (process.env.TREASURY || "0x1b04BEB50C40dF7E5EFdBf91c5D876E94666603D").toLowerCase();
+const RH_RPC = (process.env.RH_RPC || "https://rpc.mainnet.chain.robinhood.com").replace(/\/$/, "");
+const RH_EXPLORER = (process.env.RH_EXPLORER || "https://robinhoodchain.blockscout.com").replace(/\/$/, "");
+const ALLOW_DEMO_TOPUP = process.env.ALLOW_DEMO_TOPUP === "1";
 const CREDITS_PER_ETH = Number(process.env.CREDITS_PER_ETH || 100000);
-const MIN_TOPUP_ETH = Number(process.env.MIN_TOPUP_ETH || 0.005);
+const MIN_TOPUP_ETH = Number(process.env.MIN_TOPUP_ETH || 0.001);
 // VPS = API only by default. Frontend lives on Vercel.
 const SERVE_STATIC = process.env.SERVE_STATIC === "1";
 
@@ -118,6 +121,94 @@ function balanceOf(u) {
   };
 }
 
+
+async function rpc(method, params = []) {
+  const res = await fetch(RH_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || "RPC error");
+  return data.result;
+}
+
+function hexToBigInt(h) {
+  if (!h || h === "0x") return 0n;
+  return BigInt(h);
+}
+
+function ethToWei(eth) {
+  // support up to 18 decimals without float blowups for common pack sizes
+  const s = String(eth);
+  if (!/^\d+(\.\d+)?$/.test(s)) throw new Error("Invalid ETH amount");
+  const [a, b = ""] = s.split(".");
+  const frac = (b + "0".repeat(18)).slice(0, 18);
+  return BigInt(a) * 10n ** 18n + BigInt(frac);
+}
+
+function usedTxHashes(ledger) {
+  const set = new Set();
+  for (const u of Object.values(ledger)) {
+    for (const t of u.topups || []) {
+      if (t.txHash) set.add(String(t.txHash).toLowerCase());
+    }
+  }
+  return set;
+}
+
+/** Verify native ETH transfer to treasury from payer on RH chain */
+async function verifyTopupTx({ txHash, from, minWei }) {
+  const hash = txHash.toLowerCase();
+  if (!/^0x[a-f0-9]{64}$/.test(hash)) {
+    return { ok: false, code: "invalid_tx", message: "Invalid transaction hash." };
+  }
+  let tx;
+  try {
+    tx = await rpc("eth_getTransactionByHash", [hash]);
+  } catch (e) {
+    return { ok: false, code: "rpc", message: "RPC error reading transaction." };
+  }
+  if (!tx) {
+    return { ok: false, code: "not_found", message: "Transaction not found on Robinhood Chain yet. Wait and retry." };
+  }
+  let receipt;
+  try {
+    receipt = await rpc("eth_getTransactionReceipt", [hash]);
+  } catch (e) {
+    return { ok: false, code: "rpc", message: "RPC error reading receipt." };
+  }
+  if (!receipt) {
+    return { ok: false, code: "pending", message: "Transaction still pending. Wait for confirmation." };
+  }
+  if (hexToBigInt(receipt.status || "0x0") !== 1n) {
+    return { ok: false, code: "reverted", message: "Transaction failed/reverted." };
+  }
+  const txFrom = String(tx.from || "").toLowerCase();
+  const txTo = String(tx.to || "").toLowerCase();
+  if (txFrom !== from) {
+    return { ok: false, code: "wrong_sender", message: "TX sender must match connected wallet." };
+  }
+  if (txTo !== TREASURY) {
+    return { ok: false, code: "wrong_recipient", message: `TX must send ETH to treasury ${TREASURY}.` };
+  }
+  // native transfer only (no contract data expected, allow empty data)
+  const data = tx.input || tx.data || "0x";
+  if (data && data !== "0x" && data !== "0x0") {
+    return { ok: false, code: "not_native", message: "Only native ETH transfers are accepted (no contract calls)." };
+  }
+  const value = hexToBigInt(tx.value || "0x0");
+  if (value < minWei) {
+    return {
+      ok: false,
+      code: "amount_low",
+      message: `On-chain value too low for this pack (need ≥ ${minWei} wei).`,
+    };
+  }
+  // optional chain id check via receipt or tx if present
+  return { ok: true, valueWei: value, blockNumber: receipt.blockNumber };
+}
+
 function spend(u, cost) {
   const b = balanceOf(u);
   if (b.remaining < cost) return false;
@@ -150,7 +241,7 @@ const AGENTS = [
     blurb: "Default all-purpose chat",
     icon: "✦",
     mode: "standard",
-    system: "You are OpenAgent, a sharp helpful assistant. Be concise and useful.",
+    system: "You are HoodAgent, a sharp helpful assistant. Be concise and useful.",
   },
   {
     id: "web-research",
@@ -237,7 +328,7 @@ app.use(express.json({ limit: "1mb" }));
 // Friendly root — API only (no SPA)
 app.get("/", (_req, res) => {
   res.json({
-    service: "openagent-api",
+    service: "hoodagent-api",
     ok: true,
     mode: "api-only",
     docs: {
@@ -258,13 +349,13 @@ function walletFrom(req) {
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
-    service: "openagent",
+    service: "hoodagent",
     // do not expose real model id / provider
     model: PUBLIC_MODEL_LABEL,
     ready: Boolean(LLM_KEY),
     chainId: RH_CHAIN_ID,
     dailyFree: DAILY,
-    token: { symbol: "OAGT", name: "OpenAgent" },
+    token: { symbol: "HOOD", name: "HoodAgent" },
   });
 });
 
@@ -304,13 +395,19 @@ app.get("/api/v1/credits", (req, res) => {
   });
 });
 
-app.post("/api/credits/verify", (req, res) => {
+app.post("/api/credits/verify", async (req, res) => {
   const addr = walletFrom(req);
   if (!addr) {
     return res.status(401).json({
       error: { code: "unauthorized", message: "Connect wallet first." },
     });
   }
+  if (!TREASURY || TREASURY === "0x0000000000000000000000000000000000000000") {
+    return res.status(503).json({
+      error: { code: "misconfigured", message: "Treasury not configured on server." },
+    });
+  }
+
   const eth = Number(req.body?.ethAmount || 0);
   const txHash = String(req.body?.txHash || "").trim();
   if (!Number.isFinite(eth) || eth < MIN_TOPUP_ETH) {
@@ -318,32 +415,107 @@ app.post("/api/credits/verify", (req, res) => {
       error: { code: "validation_error", message: `Minimum top-up is ${MIN_TOPUP_ETH} ETH` },
     });
   }
-  const demo = !txHash || txHash.startsWith("demo:") || process.env.ALLOW_DEMO_TOPUP === "1";
-  if (!demo && !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-    return res.status(400).json({
-      error: { code: "validation_error", message: "Invalid tx hash" },
+
+  const ledger = loadLedger();
+  const u = ensureUser(ledger, addr);
+
+  // Live path: verify on-chain payment to treasury
+  const isDemoReq = txHash.startsWith("demo:");
+  if (isDemoReq || (!txHash && ALLOW_DEMO_TOPUP)) {
+    if (!ALLOW_DEMO_TOPUP) {
+      return res.status(400).json({
+        error: {
+          code: "demo_disabled",
+          message: "Demo top-up disabled. Send real ETH on Robinhood Chain, then verify the tx.",
+        },
+      });
+    }
+    const grant = Math.floor(eth * CREDITS_PER_ETH);
+    u.purchased = (u.purchased || 0) + grant;
+    u.topups.push({
+      at: new Date().toISOString(),
+      eth,
+      grant,
+      txHash: txHash || `demo:${randomUUID()}`,
+      demo: true,
+    });
+    saveLedger(ledger);
+    const b = balanceOf(u);
+    return res.json({
+      ok: true,
+      credits_granted: grant,
+      credits_remaining: b.remaining,
+      purchased_credits: b.purchased,
+      treasury: TREASURY,
+      chainId: RH_CHAIN_ID,
+      demo: true,
     });
   }
 
-  const grant = Math.floor(eth * CREDITS_PER_ETH);
-  const ledger = loadLedger();
-  const u = ensureUser(ledger, addr);
+  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+    return res.status(400).json({
+      error: { code: "validation_error", message: "Provide a valid tx hash from your payment." },
+    });
+  }
+
+  const hash = txHash.toLowerCase();
+  if (usedTxHashes(ledger).has(hash)) {
+    return res.status(409).json({
+      error: { code: "tx_reused", message: "This transaction was already credited." },
+    });
+  }
+
+  let minWei;
+  try {
+    minWei = ethToWei(eth);
+    // allow 0.5% underpack tolerance for float UI
+    minWei = (minWei * 995n) / 1000n;
+  } catch {
+    return res.status(400).json({ error: { code: "validation_error", message: "Invalid ETH amount." } });
+  }
+
+  let verified;
+  try {
+    verified = await verifyTopupTx({ txHash: hash, from: addr, minWei });
+  } catch (e) {
+    console.error("[topup]", e);
+    return res.status(502).json({
+      error: { code: "rpc", message: "Could not verify transaction. Try again shortly." },
+    });
+  }
+  if (!verified.ok) {
+    return res.status(400).json({ error: { code: verified.code, message: verified.message } });
+  }
+
+  // Grant from actual on-chain value (not UI claim)
+  const ethPaid = Number(verified.valueWei) / 1e18;
+  const grant = Math.floor(ethPaid * CREDITS_PER_ETH);
+  if (grant < 1) {
+    return res.status(400).json({
+      error: { code: "amount_low", message: "Payment too small to grant credits." },
+    });
+  }
+
   u.purchased = (u.purchased || 0) + grant;
   u.topups.push({
     at: new Date().toISOString(),
-    eth,
+    eth: ethPaid,
     grant,
-    txHash: txHash || `demo:${randomUUID()}`,
+    txHash: hash,
+    blockNumber: verified.blockNumber,
   });
   saveLedger(ledger);
   const b = balanceOf(u);
   res.json({
+    ok: true,
     credits_granted: grant,
     credits_remaining: b.remaining,
     purchased_credits: b.purchased,
+    eth_paid: ethPaid,
     treasury: TREASURY,
     chainId: RH_CHAIN_ID,
-    note: demo ? "Demo grant — wire RPC receipt verify before mainnet money" : "Recorded",
+    txHash: hash,
+    explorer: `${RH_EXPLORER}/tx/${hash}`,
   });
 });
 
@@ -351,14 +523,19 @@ app.get("/api/shop", (_req, res) => {
   res.json({
     chainId: RH_CHAIN_ID,
     chainName: "Robinhood Chain",
+    rpcUrl: RH_RPC,
+    explorer: RH_EXPLORER,
     treasury: TREASURY,
     creditsPerEth: CREDITS_PER_ETH,
     minEth: MIN_TOPUP_ETH,
-    token: { symbol: "OAGT", name: "OpenAgent" },
+    demoTopup: ALLOW_DEMO_TOPUP,
+    live: !ALLOW_DEMO_TOPUP,
+    token: { symbol: "HOOD", name: "HoodAgent" },
     packs: [
-      { eth: 0.005, label: "Starter" },
-      { eth: 0.01, label: "Builder" },
-      { eth: 0.05, label: "Pro desk" },
+      { eth: 0.001, label: "Starter" },
+      { eth: 0.005, label: "Builder" },
+      { eth: 0.01, label: "Pro" },
+      { eth: 0.05, label: "Desk" },
     ].map((p) => ({ ...p, credits: Math.floor(p.eth * CREDITS_PER_ETH) })),
   });
 });
@@ -417,7 +594,7 @@ app.post("/api/chat", async (req, res) => {
       if (m.role !== "assistant") return true;
       const c = m.content.trim();
       if (c.startsWith("⚠️")) return false;
-      if (/API 404|backend not reached|OpenAgent backend/i.test(c)) return false;
+      if (/API 404|backend not reached|HoodAgent backend/i.test(c)) return false;
       if (c === "…" || c === "...") return false;
       return true;
     })
@@ -532,6 +709,6 @@ if (SERVE_STATIC && fs.existsSync(dist)) {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(
-    `[openagent-api] :${PORT} model=${LLM_MODEL} daily=${DAILY} key=${LLM_KEY ? "yes" : "NO"} static=${SERVE_STATIC ? "on" : "OFF (Vercel frontend)"} cors=${ALLOWED_ORIGINS.join("|")}`
+    `[hoodagent-api] :${PORT} model=${LLM_MODEL} daily=${DAILY} key=${LLM_KEY ? "yes" : "NO"} static=${SERVE_STATIC ? "on" : "OFF (Vercel frontend)"} cors=${ALLOWED_ORIGINS.join("|")}`
   );
 });

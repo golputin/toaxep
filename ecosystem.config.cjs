@@ -1,8 +1,8 @@
-/** OpenAgent API — pm2 (VPS only, no static UI) */
+/** HoodAgent API — pm2 (VPS only, no static UI) */
 module.exports = {
   apps: [
     {
-      name: "openagent-api",
+      name: "hoodagent-api",
       cwd: "/root/openagent",
       script: "server/index.js",
       instances: 1,

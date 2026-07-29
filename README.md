@@ -1,108 +1,59 @@
-# OpenAgent — Vercel (frontend) + VPS (API only)
+# HoodAgent — Vercel (frontend) + VPS (API only)
+
+## Live product
+
+- **Name:** HoodAgent  
+- **Credits:** `$HOOD`  
+- **Top-up:** native ETH on **Robinhood Chain (4663)** → treasury, verified via RPC  
+- **Demo top-up:** off (`ALLOW_DEMO_TOPUP=0`)
+
+## Routes
+
+| URL | What |
+|-----|------|
+| `/` | Marketing landing |
+| `/app` | Live chat desk |
+| `app.*` host | Forces app shell |
 
 ## Architecture
 
 ```
 Browser  →  Vercel (static UI)
-                │
-                │  fetch(VITE_API_BASE + '/api/chat')
+                │  /api/* rewrite
                 ▼
-         VPS :8787  (Express API only — keys, credits, LLM proxy)
-```
-
-**Do not** host the SPA on the VPS. **Do not** put `LLM_API_KEY` in Vercel.
-
-
-## Landing + App routes
-
-| URL | What |
-|-----|------|
-| `/` | Marketing landing (Opentroy-style) |
-| `/app` | Wallet chat product |
-| `app.openagent.xyz` | Same as app (hostname forces product) |
-| `openagent.xyz` | Marketing (after you buy domain → point to Vercel) |
-
-CTA buttons use relative `/app` by default. Override with:
-
-```
-VITE_APP_URL=https://app.openagent.xyz
-```
-
-
-## 1) VPS — API only
-
-```bash
-cd /root/openagent   # or clone repo
-cp .env.example .env # set LLM_API_KEY, ALLOWED_ORIGINS
-npm install --omit=dev
-pm2 start server/index.js --name openagent-api
-pm2 save
-```
-
-Health check:
-
-```bash
-curl http://127.0.0.1:8787/api/health
-curl http://YOUR_VPS_IP:8787/api/health
-```
-
-Open firewall **TCP 8787** (or put nginx/caddy TLS in front on 443).
-
-### Env (VPS `.env`)
-
-| Key | Meaning |
-|-----|---------|
-| `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL` | OpenAI-compatible upstream |
-| `PORT` | default `8787` |
-| `ALLOWED_ORIGINS` | e.g. `https://your-app.vercel.app,https://*.vercel.app` |
-| `SERVE_STATIC` | leave `0` / unset |
-| `DAILY_FREE_CREDITS` | default 10 |
-
-## Vercel frontend (blockearn.vercel.app / any project)
-
-`vercel.json` **rewrites** browser calls:
-
-```
-Browser POST /api/chat  →  Vercel proxy  →  http://VPS:8787/api/chat
-```
-
-So the UI can keep using **relative** `/api/...` (no mixed-content, no CORS pain).
-
-After pulling latest `main`, **Redeploy** on Vercel (Deployments → … → Redeploy).  
-Until redeploy, old `vercel.json` still serves `index.html` for POST → **405**.
-
-Optional override (skip proxy):
-
-```
-VITE_API_BASE=https://your-api-domain.com
+         VPS :8787  (Express — keys, credits, LLM, top-up verify)
 ```
 
 ## VPS API
 
 ```bash
-pm2 status openagent-api
-curl http://104.245.34.139:8787/api/health
+cd /root/openagent
+# .env: LLM_*, TREASURY, ALLOW_DEMO_TOPUP=0, RH_RPC
+pm2 restart hoodagent-api   # or openagent-api if not renamed yet
+curl http://127.0.0.1:8787/api/health
+curl http://127.0.0.1:8787/api/shop
 ```
 
-## 3) CORS
+### Top-up flow
 
-VPS must allow your Vercel origin. Default allows `https://*.vercel.app` and localhost.
+1. User connects wallet (extension).  
+2. Clicks pack → `eth_sendTransaction` to `TREASURY` on chain 4663.  
+3. Frontend POSTs `/api/credits/verify` with `txHash`.  
+4. API checks receipt: success, from=wallet, to=treasury, native value ≥ pack.  
+5. Credits granted from **on-chain value** (tx cannot be reused).
 
-If you use a custom domain on Vercel, add it:
+Manual claim: paste tx hash on Buy Credits page.
+
+## Vercel
+
+`vercel.json` rewrites `/api/*` → VPS. Redeploy after pull.
+
+Optional:
 
 ```
-ALLOWED_ORIGINS=https://app.yourdomain.com,https://*.vercel.app
-```
-
-Then `pm2 restart openagent-api`.
-
-## Local dev (optional)
-
-```bash
-npm run dev
-# web :5173 proxies /api → :8787 — leave VITE_API_BASE empty
+VITE_APP_URL=https://app.yourdomain.com
 ```
 
 ## Brand
 
-- Token mark **$OAGT** — `public/token-oagt.svg`
+- Mark: `public/token-hood.svg` (`$HOOD`)

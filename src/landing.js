@@ -1,14 +1,13 @@
 /**
- * OpenAgent marketing landing — Opentroy / OpenAgents inspired
- * Routes: /  → landing · /app → product (chat)
- * Domains: openagent.xyz (marketing) · app.openagent.xyz (app)
+ * HoodAgent marketing landing
+ * Routes: / → landing · /app → product
+ * Domains: hoodagent.xyz (marketing) · app.hoodagent.xyz (app)
  */
 import "./landing.css";
 
 const APP_HREF = (() => {
   const env = String(import.meta.env.VITE_APP_URL || "").trim().replace(/\/$/, "");
   if (env) return env.endsWith("/app") ? env : `${env}/app`;
-  // subdomain app.* → stay on app root
   if (typeof location !== "undefined" && /^app\./i.test(location.hostname)) return "/";
   return "/app";
 })();
@@ -17,27 +16,27 @@ const FEATURES = [
   {
     k: "01",
     t: "Wallet-gated access",
-    d: "Connect any EVM wallet. Your address is the account — no email, no password dump.",
+    d: "Connect any EVM wallet. Your address is the account — no email required.",
   },
   {
     k: "02",
     t: "Daily free credits",
-    d: "Start free every day. Spend credits on agent turns; top up when you need more firepower.",
+    d: "Start free every day. Spend credits on agent turns; top up on-chain when you need more.",
   },
   {
     k: "03",
     t: "Specialist agents",
-    d: "General, research, code review, crypto tracker, DeFi analyzer — pick the desk, not a blank model.",
+    d: "General, research, code review, crypto tracker, DeFi analyzer — pick the desk.",
   },
   {
     k: "04",
-    t: "On-chain top-up rail",
-    d: "Buy credits with native ETH on Robinhood Chain. Transparent packs. $OAGT product branding.",
+    t: "Live on-chain top-up",
+    d: "Buy $HOOD credits with native ETH on Robinhood Chain. Verified payments only.",
   },
 ];
 
 const STEPS = [
-  { n: "1", t: "Connect", d: "Link your wallet or paste an address to unlock the desk." },
+  { n: "1", t: "Connect", d: "Link your wallet to unlock the HoodAgent desk." },
   { n: "2", t: "Choose an agent", d: "Pick a specialist. Each turn costs clear credits." },
   { n: "3", t: "Execute", d: "Chat, research, review — agents work in your credit budget." },
 ];
@@ -53,28 +52,28 @@ const AGENTS = [
 
 const FAQS = [
   {
-    q: "What is OpenAgent?",
-    a: "A wallet-gated AI chat desk: connect a wallet, spend credits on specialist agents, top up on-chain when free daily credits run out.",
+    q: "What is HoodAgent?",
+    a: "A live wallet-gated AI desk on Robinhood Chain: connect a wallet, spend daily free credits, top up with real ETH when you need more.",
   },
   {
     q: "Do I need a credit card?",
-    a: "No. Free daily credits cover light use. Extra capacity is purchased with ETH on Robinhood Chain — not a SaaS subscription.",
+    a: "No. Free daily credits cover light use. Extra capacity is purchased with native ETH on Robinhood Chain.",
   },
   {
-    q: "Where does the app live?",
-    a: "Marketing site on openagent.xyz (coming). Product desk at app.openagent.xyz /app. API stays on our VPS — keys never ship to the browser.",
+    q: "How does top-up work?",
+    a: "Pick a pack in the app, confirm the ETH transfer to the treasury from your wallet, and credits are granted after on-chain verification.",
   },
   {
-    q: "What is $OAGT?",
-    a: "Product credit branding for OpenAgent. Credits meter usage inside the app; treat $OAGT as the desk’s unit of work, not financial advice.",
+    q: "What is $HOOD?",
+    a: "In-app credit branding for HoodAgent. Credits meter usage inside the product — not financial advice.",
   },
   {
-    q: "Is this production-ready?",
-    a: "Early preview. Expect rapid iteration. Core loop works: wallet → credits → agents → chat.",
+    q: "Is HoodAgent live?",
+    a: "Yes. Chat, credits, and on-chain top-up verification are live. Features still ship fast.",
   },
   {
     q: "How is this different from a normal chatbot?",
-    a: "Identity is the wallet, metering is credits, and agents are mode-priced. Built for crypto-native operators who already live in wallets.",
+    a: "Identity is the wallet, metering is credits, and top-ups settle on Robinhood Chain.",
   },
 ];
 
@@ -90,7 +89,6 @@ export function isAppHost() {
   if (typeof location === "undefined") return false;
   const h = location.hostname;
   if (/^app\./i.test(h)) return true;
-  // vercel preview of product-only deploys can force app via env
   if (import.meta.env.VITE_FORCE_APP === "1") return true;
   return false;
 }
@@ -119,9 +117,9 @@ export function renderLanding(root) {
 
     <header class="lp-nav">
       <a class="lp-brand" href="/">
-        <img src="/token-oagt.svg" width="32" height="32" alt="" />
-        <span>OpenAgent</span>
-        <em>$OAGT</em>
+        <img src="/token-hood.svg" width="32" height="32" alt="" />
+        <span>HoodAgent</span>
+        <em>$HOOD</em>
       </a>
       <nav class="lp-links">
         <a href="#features">Features</a>
@@ -145,25 +143,25 @@ export function renderLanding(root) {
     </div>
 
     <section class="lp-hero">
-      <div class="lp-pill"><span class="dot"></span> Early preview · wallet-first</div>
+      <div class="lp-pill"><span class="dot"></span> Live on Robinhood Chain</div>
       <h1>Where AI agents<br/><span class="grad">get real work done.</span></h1>
       <p class="lp-lead">
-        Build agents. Meter usage with credits. Execute from one desk —
-        gated by your wallet, powered by <strong>$OAGT</strong> credits.
+        Wallet-gated agents. Metered <strong>$HOOD</strong> credits.
+        Top up with real ETH — verified on-chain.
       </p>
       <div class="lp-hero-cta">
-        <a class="lp-btn primary xl" href="${esc(APP_HREF)}">Run in Web</a>
+        <a class="lp-btn primary xl" href="${esc(APP_HREF)}">Open HoodAgent</a>
         <a class="lp-btn ghost xl" href="#how">See how it works</a>
       </div>
-      <p class="lp-micro">10 free credits / day · Robinhood Chain top-up · No email required</p>
+      <p class="lp-micro">10 free credits / day · Live ETH top-up · No email required</p>
     </section>
 
-    <section class="lp-preview" aria-label="Product preview">
+    <section class="lp-preview" aria-label="Product">
       <div class="lp-window">
         <div class="lp-win-bar">
           <span class="t red"></span><span class="t yel"></span><span class="t grn"></span>
-          <strong>OpenAgent desk</strong>
-          <em>10 credits</em>
+          <strong>HoodAgent desk</strong>
+          <em>Live</em>
         </div>
         <div class="lp-win-body">
           <aside>
@@ -177,7 +175,7 @@ export function renderLanding(root) {
             <h3>How can I help you today?</h3>
             <div class="chips">
               <span>Live market brief</span>
-              <span>Review this contract risk</span>
+              <span>Review contract risk</span>
               <span>Draft a product one-pager</span>
             </div>
             <div class="fake-input">Ask anything… <b>↵</b></div>
@@ -187,9 +185,9 @@ export function renderLanding(root) {
     </section>
 
     <section class="lp-section" id="features">
-      <p class="lp-kicker">Infrastructure</p>
-      <h2>Deploy agents with budgets, not blank chat boxes.</h2>
-      <p class="lp-sub">Inspired by desks like Opentroy — wallet identity, credit metering, specialist modes.</p>
+      <p class="lp-kicker">Product</p>
+      <h2>Agents with budgets — not blank chat boxes.</h2>
+      <p class="lp-sub">Wallet identity, credit metering, specialist modes, live Robinhood Chain top-ups.</p>
       <div class="lp-grid-4">
         ${FEATURES.map(
           (f) => `
@@ -204,7 +202,7 @@ export function renderLanding(root) {
 
     <section class="lp-section" id="how">
       <p class="lp-kicker">How it works</p>
-      <h2>One wallet to begin. Three steps to clarity.</h2>
+      <h2>One wallet. Three steps.</h2>
       <div class="lp-steps">
         ${STEPS.map(
           (s) => `
@@ -239,7 +237,7 @@ export function renderLanding(root) {
 
     <section class="lp-section" id="faq">
       <p class="lp-kicker">FAQ</p>
-      <h2>Your questions, answered with clarity.</h2>
+      <h2>Straight answers.</h2>
       <div class="lp-faq" id="lp-faq">
         ${FAQS.map(
           (f, i) => `
@@ -253,18 +251,18 @@ export function renderLanding(root) {
 
     <section class="lp-cta-band">
       <div>
-        <h2>Step into the agent desk.</h2>
-        <p>Connect a wallet. Spend free credits. Scale with on-chain top-ups.</p>
+        <h2>Open the HoodAgent desk.</h2>
+        <p>Connect a wallet. Spend free credits. Top up live on Robinhood Chain.</p>
       </div>
-      <a class="lp-btn primary xl" href="${esc(APP_HREF)}">Run in Web</a>
+      <a class="lp-btn primary xl" href="${esc(APP_HREF)}">Launch app</a>
     </section>
 
     <footer class="lp-foot">
       <div class="lp-foot-brand">
-        <img src="/token-oagt.svg" width="28" height="28" alt="" />
+        <img src="/token-hood.svg" width="28" height="28" alt="" />
         <div>
-          <strong>OpenAgent</strong>
-          <span>Wallet · credits · agents · $OAGT</span>
+          <strong>HoodAgent</strong>
+          <span>Wallet · credits · agents · $HOOD</span>
         </div>
       </div>
       <div class="lp-foot-cols">
@@ -275,18 +273,18 @@ export function renderLanding(root) {
           <a href="#agents">Agents</a>
         </div>
         <div>
-          <b>Domains</b>
-          <span>openagent.xyz</span>
-          <span>app.openagent.xyz</span>
+          <b>Network</b>
+          <span>Robinhood Chain</span>
+          <span>Live top-up</span>
           <span>API on VPS</span>
         </div>
         <div>
-          <b>Token</b>
-          <span>$OAGT credits</span>
+          <b>Credits</b>
+          <span>$HOOD</span>
           <span>Not financial advice</span>
         </div>
       </div>
-      <p class="lp-copy">© ${new Date().getFullYear()} OpenAgent · Early preview</p>
+      <p class="lp-copy">© ${new Date().getFullYear()} HoodAgent · Live</p>
     </footer>
   </div>`;
 
