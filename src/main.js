@@ -36,10 +36,20 @@ function headers() {
 }
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    ...opts,
-    headers: { ...headers(), ...(opts.headers || {}) },
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      ...opts,
+      headers: { ...headers(), ...(opts.headers || {}) },
+    });
+  } catch (e) {
+    const err = new Error(
+      "Network error talking to API. Run `npm run dev` (API :8787 + web) or `npm start` after build."
+    );
+    err.status = 0;
+    err.data = { error: { code: "network", message: e.message } };
+    throw err;
+  }
   const text = await res.text();
   let data;
   try {
@@ -48,7 +58,15 @@ async function api(path, opts = {}) {
     data = { raw: text };
   }
   if (!res.ok) {
-    const err = new Error(data?.error?.message || data?.message || `HTTP ${res.status}`);
+    // SPA/static server often returns HTML 404 when API is not proxied
+    const looksHtml = typeof text === "string" && text.trimStart().startsWith("<!DOCTYPE");
+    const msg =
+      data?.error?.message ||
+      data?.message ||
+      (res.status === 404 || looksHtml
+        ? "API 404 — OpenAgent backend not reached. Use `npm run dev` (not only vite preview without API), or `npm run build && npm start`."
+        : `HTTP ${res.status}`);
+    const err = new Error(msg);
     err.status = res.status;
     err.data = data;
     throw err;
@@ -251,13 +269,20 @@ function scrollChat() {
 function render() {
   const app = $("#app");
   app.innerHTML = `
+    <div class="bg-root" aria-hidden="true">
+      <div class="bg-orb a"></div>
+      <div class="bg-orb b"></div>
+      <div class="bg-orb c"></div>
+    </div>
+    <div class="bg-noise" aria-hidden="true"></div>
     <div class="shell ${state.sidebarOpen ? "" : "collapsed"}">
       <aside class="sidebar">
         <div class="brand">
-          <img src="/favicon.svg" alt="" width="28" height="28" />
+          <div class="brand-mark"><img src="/token-oagt.svg" alt="$OAGT" width="36" height="36" /></div>
           <div>
             <strong>OpenAgent</strong>
             <small>wallet · credits · agents</small>
+            <span class="token-chip">$OAGT</span>
           </div>
           <button type="button" class="icon-btn" id="btn-collapse" title="Collapse">‹</button>
         </div>
@@ -414,6 +439,13 @@ function renderShop(stage) {
     <div class="panel narrow">
       <h1>Buy Credits</h1>
       <p class="muted">Top up with native ETH on <b>Robinhood Chain</b> (${shop?.chainId || 4663}). Demo grant enabled for local dev.</p>
+      <div class="shop-hero">
+        <img src="/token-oagt.svg" alt="$OAGT" width="72" height="72" />
+        <div>
+          <strong>$OAGT · OpenAgent</strong>
+          <p class="muted tiny" style="margin:6px 0 0">Credits power agent messages. Token mark is product branding (not a live claim of on-chain listing).</p>
+        </div>
+      </div>
       <div class="shop-meta">
         <div><span>Rate</span><b>${(shop?.creditsPerEth || 100000).toLocaleString()} cr / ETH</b></div>
         <div><span>Treasury</span><b class="mono">${shortAddr(shop?.treasury || "0x0")}</b></div>
@@ -456,9 +488,9 @@ function renderChat(stage) {
       ${
         empty
           ? `<div class="hero" id="hero">
-              <img src="/favicon.svg" width="48" height="48" alt="" />
+              <img class="hero-token" src="/token-oagt.svg" width="88" height="88" alt="$OAGT" />
               <h1>How can I help you today?</h1>
-              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · ${agent?.creditCost ?? 1} credit / message</p>
+              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · ${agent?.creditCost ?? 1} credit / message · <b>$OAGT</b> credits</p>
               <div class="suggestions">
                 <button type="button" data-sug="Summarize the risks of wallet-gated AI credit systems.">Credit system risks</button>
                 <button type="button" data-sug="Write a sharp product brief for an on-chain agent marketplace.">Agent marketplace brief</button>

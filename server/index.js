@@ -2,7 +2,7 @@
  * OpenAgent API — chat proxy + wallet credits ledger
  * Inspired by Opentroy: wallet gate, daily free credits, paid top-up rail (RH)
  */
-import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import fs from "fs";
@@ -12,18 +12,24 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
+
+// Always load .env from project root (fixes 404/misconfig when cwd ≠ ROOT)
+dotenv.config({ path: path.join(ROOT, ".env") });
+dotenv.config({ path: path.join(ROOT, ".env.local") });
+
 const DATA = path.join(ROOT, "data");
 const LEDGER = path.join(DATA, "credits.json");
 
 const PORT = Number(process.env.PORT || 8787);
 const DAILY = Number(process.env.DAILY_FREE_CREDITS || 10);
-const LLM_URL = (process.env.LLM_API_URL || "https://api.freemodel.dev/v1").replace(/\/$/, "");
+const LLM_URL = (process.env.LLM_API_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, "");
 const LLM_KEY = process.env.LLM_API_KEY || "";
-const LLM_MODEL = process.env.LLM_MODEL || "gpt-5.4-mini";
+const LLM_MODEL = process.env.LLM_MODEL || "z-ai/glm-5.2";
 const RH_CHAIN_ID = Number(process.env.RH_CHAIN_ID || 4663);
 const TREASURY = process.env.TREASURY || "0x0000000000000000000000000000000000000000";
 const CREDITS_PER_ETH = Number(process.env.CREDITS_PER_ETH || 100000);
 const MIN_TOPUP_ETH = Number(process.env.MIN_TOPUP_ETH || 0.005);
+const SERVE_STATIC = process.env.SERVE_STATIC === "1" || process.env.NODE_ENV === "production";
 
 fs.mkdirSync(DATA, { recursive: true });
 if (!fs.existsSync(LEDGER)) fs.writeFileSync(LEDGER, "{}");
@@ -40,7 +46,7 @@ function saveLedger(l) {
 }
 
 function dayKey(d = new Date()) {
-  return d.toISOString().slice(0, 10); // UTC day
+  return d.toISOString().slice(0, 10);
 }
 
 function normAddr(a) {
@@ -81,7 +87,6 @@ function balanceOf(u) {
   };
 }
 
-/** Spend cost credits: free first, then purchased */
 function spend(u, cost) {
   const b = balanceOf(u);
   if (b.remaining < cost) return false;
@@ -123,7 +128,7 @@ const AGENTS = [
     icon: "🔎",
     mode: "research",
     system:
-      "You are a research agent. Structure answers with sources placeholders, bullet findings, and clear next steps. Be skeptical of weak claims.",
+      "You are a research agent. Structure answers with bullet findings and clear next steps. Be skeptical of weak claims.",
   },
   {
     id: "code-review",
@@ -180,7 +185,7 @@ const AGENTS = [
 ];
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, exposedHeaders: ["X-Credits-Remaining", "X-Daily-Limit", "X-Purchased-Credits", "X-Credit-Cost"] }));
 app.use(express.json({ limit: "1mb" }));
 
 function walletFrom(req) {
@@ -190,10 +195,12 @@ function walletFrom(req) {
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
+    service: "openagent",
     model: LLM_MODEL,
     llmConfigured: Boolean(LLM_KEY),
     chainId: RH_CHAIN_ID,
     dailyFree: DAILY,
+    token: { symbol: "OAGT", name: "OpenAgent" },
   });
 });
 
@@ -227,16 +234,12 @@ app.get("/api/v1/credits", (req, res) => {
     daily_limit: b.dailyLimit,
     purchased_credits: b.purchased,
     free_left: b.freeLeft,
-    resets_at: new Date(Date.UTC(
-      new Date().getUTCFullYear(),
-      new Date().getUTCMonth(),
-      new Date().getUTCDate() + 1,
-      0, 0, 0
-    )).toISOString(),
+    resets_at: new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1, 0, 0, 0)
+    ).toISOString(),
   });
 });
 
-/** Demo top-up credit grant (production would verify RH tx → treasury) */
 app.post("/api/credits/verify", (req, res) => {
   const addr = walletFrom(req);
   if (!addr) {
@@ -248,13 +251,9 @@ app.post("/api/credits/verify", (req, res) => {
   const txHash = String(req.body?.txHash || "").trim();
   if (!Number.isFinite(eth) || eth < MIN_TOPUP_ETH) {
     return res.status(400).json({
-      error: {
-        code: "validation_error",
-        message: `Minimum top-up is ${MIN_TOPUP_ETH} ETH`,
-      },
+      error: { code: "validation_error", message: `Minimum top-up is ${MIN_TOPUP_ETH} ETH` },
     });
   }
-  // Demo mode: accept labeled demo hashes; real mode needs RPC receipt check
   const demo = !txHash || txHash.startsWith("demo:") || process.env.ALLOW_DEMO_TOPUP === "1";
   if (!demo && !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
     return res.status(400).json({
@@ -280,9 +279,7 @@ app.post("/api/credits/verify", (req, res) => {
     purchased_credits: b.purchased,
     treasury: TREASURY,
     chainId: RH_CHAIN_ID,
-    note: demo
-      ? "Demo grant — wire RPC receipt verify before mainnet money"
-      : "Recorded",
+    note: demo ? "Demo grant — wire RPC receipt verify before mainnet money" : "Recorded",
   });
 });
 
@@ -293,14 +290,22 @@ app.get("/api/shop", (_req, res) => {
     treasury: TREASURY,
     creditsPerEth: CREDITS_PER_ETH,
     minEth: MIN_TOPUP_ETH,
+    token: { symbol: "OAGT", name: "OpenAgent" },
     packs: [
       { eth: 0.005, label: "Starter" },
       { eth: 0.01, label: "Builder" },
       { eth: 0.05, label: "Pro desk" },
-    ].map((p) => ({
-      ...p,
-      credits: Math.floor(p.eth * CREDITS_PER_ETH),
-    })),
+    ].map((p) => ({ ...p, credits: Math.floor(p.eth * CREDITS_PER_ETH) })),
+  });
+});
+
+/** Helpful message if someone GETs /api/chat in browser */
+app.get("/api/chat", (_req, res) => {
+  res.status(405).json({
+    error: {
+      code: "method_not_allowed",
+      message: "Use POST /api/chat with JSON body { messages, agentId } and header X-Wallet-Address",
+    },
   });
 });
 
@@ -315,7 +320,7 @@ app.post("/api/chat", async (req, res) => {
     return res.status(503).json({
       error: {
         code: "misconfigured",
-        message: "LLM_API_KEY missing on server. Set .env",
+        message: "LLM_API_KEY missing on server. Copy .env.example → .env and set key, then restart API.",
       },
     });
   }
@@ -392,12 +397,9 @@ app.post("/api/chat", async (req, res) => {
   }
 
   const content =
-    data?.choices?.[0]?.message?.content ||
-    data?.choices?.[0]?.text ||
-    "(empty model response)";
+    data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || "(empty model response)";
 
   if (!spend(u, cost)) {
-    // race — shouldn't happen
     saveLedger(ledger);
     return res.status(402).json({
       error: { code: "credits_exhausted", message: "Out of credits." },
@@ -422,16 +424,28 @@ app.post("/api/chat", async (req, res) => {
   });
 });
 
-// production static
+// JSON 404 for unknown API routes (prevents HTML 404 / SPA fallback confusion)
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    error: {
+      code: "not_found",
+      message: `No API route ${req.method} ${req.originalUrl}. Is the OpenAgent API running on :${PORT}? Try: npm run dev`,
+      hint: "Dev needs both Vite (:5173) and API (:8787). Or: npm run build && npm start",
+    },
+  });
+});
+
+// Static UI (production or SERVE_STATIC=1)
 const dist = path.join(ROOT, "dist");
-if (process.env.NODE_ENV === "production" && fs.existsSync(dist)) {
+if (SERVE_STATIC && fs.existsSync(dist)) {
   app.use(express.static(dist));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
+  app.get("*", (req, res) => {
     res.sendFile(path.join(dist, "index.html"));
   });
 }
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[openagent] api :${PORT} model=${LLM_MODEL} daily=${DAILY} key=${LLM_KEY ? "yes" : "NO"}`);
+  console.log(
+    `[openagent] api :${PORT} model=${LLM_MODEL} daily=${DAILY} key=${LLM_KEY ? "yes" : "NO"} static=${SERVE_STATIC && fs.existsSync(dist) ? "on" : "off"} root=${ROOT}`
+  );
 });

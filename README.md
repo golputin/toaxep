@@ -22,18 +22,33 @@ Connect wallet → free daily credits → chat with agents → buy more credits 
 ```bash
 cp .env.example .env   # set LLM_API_KEY
 npm install
-npm run dev
+npm run dev            # API :8787 + Vite :5173 (BOTH required)
 ```
 
 - Web: http://localhost:5173  
 - API: http://localhost:8787  
 
+**HTTP 404 on chat?** Almost always means only the static UI is running (no API / no proxy). Fix:
+
+```bash
+npm run dev            # recommended
+# or single process:
+npm run serve          # build + API serves dist on :8787
+```
+
+Do **not** open `dist/index.html` as a file, and do not run bare `vite preview` without API (use `npm run preview` which starts both).
+
 Production:
 
 ```bash
 npm run build
-NODE_ENV=production npm start   # serves dist + /api
+npm start              # serves dist + /api on PORT (default 8787)
 ```
+
+## Brand
+
+- Token mark: **$OAGT** (`public/token-oagt.svg`) — product credit branding  
+- Mesh background + lime glow UI (not flat black)
 
 ## Env
 
