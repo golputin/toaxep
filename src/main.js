@@ -4,6 +4,20 @@ import { AGENTS_FALLBACK } from "./agents.js";
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
+/**
+ * API base for split deploy:
+ * - Vercel frontend → set VITE_API_BASE=https://YOUR_VPS:8787 (or https domain)
+ * - Local vite with proxy → leave empty (same-origin /api → vite proxy)
+ */
+const API_BASE = String(import.meta.env.VITE_API_BASE || "")
+  .trim()
+  .replace(/\/$/, "");
+
+function apiUrl(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
+}
+
 const state = {
   wallet: localStorage.getItem("oa_wallet") || null,
   sidebarOpen: true,
@@ -16,6 +30,7 @@ const state = {
   shop: null,
   busy: false,
   previewDismissed: localStorage.getItem("oa_preview_dismissed") === "1",
+  apiBase: API_BASE || "(same-origin / vite proxy)",
 };
 
 function loadThreads() {
@@ -36,15 +51,16 @@ function headers() {
 }
 
 async function api(path, opts = {}) {
+  const url = apiUrl(path);
   let res;
   try {
-    res = await fetch(path, {
+    res = await fetch(url, {
       ...opts,
       headers: { ...headers(), ...(opts.headers || {}) },
     });
   } catch (e) {
     const err = new Error(
-      "Network error talking to API. Run `npm run dev` (API :8787 + web) or `npm start` after build."
+      `Network error → ${url}. Check VITE_API_BASE on Vercel and that VPS API is up (CORS / firewall port).`
     );
     err.status = 0;
     err.data = { error: { code: "network", message: e.message } };
@@ -58,13 +74,12 @@ async function api(path, opts = {}) {
     data = { raw: text };
   }
   if (!res.ok) {
-    // SPA/static server often returns HTML 404 when API is not proxied
     const looksHtml = typeof text === "string" && text.trimStart().startsWith("<!DOCTYPE");
     const msg =
       data?.error?.message ||
       data?.message ||
       (res.status === 404 || looksHtml
-        ? "API 404 — OpenAgent backend not reached. Use `npm run dev` (not only vite preview without API), or `npm run build && npm start`."
+        ? `API 404 at ${url} — Vercel is static only. Point VITE_API_BASE to your VPS API (e.g. http://IP:8787), redeploy frontend.`
         : `HTTP ${res.status}`);
     const err = new Error(msg);
     err.status = res.status;

@@ -1,70 +1,89 @@
-# OpenAgent
+# OpenAgent — Vercel (frontend) + VPS (API only)
 
-Wallet-gated AI chat inspired by [Opentroy](https://app.opentroy.org/) — **not affiliated**.
+## Architecture
 
 ```
-Connect wallet → free daily credits → chat with agents → buy more credits (RH ETH rail)
+Browser  →  Vercel (static UI)
+                │
+                │  fetch(VITE_API_BASE + '/api/chat')
+                ▼
+         VPS :8787  (Express API only — keys, credits, LLM proxy)
 ```
 
-## Features
+**Do not** host the SPA on the VPS. **Do not** put `LLM_API_KEY` in Vercel.
 
-| | |
-|--|--|
-| Wallet gate | `window.ethereum` or paste `0x` address |
-| Credits | **10 free / UTC day** + purchased balance |
-| Agents | General, research, code review, crypto, DeFi, SQL, email, image-prompt |
-| Cost | 1–6 credits / message by agent weight |
-| Shop | Demo top-up on **Robinhood Chain (4663)** rate table |
-| API | Express proxy → OpenAI-compatible LLM (server-side key only) |
-
-## Quick start
+## 1) VPS — API only
 
 ```bash
-cp .env.example .env   # set LLM_API_KEY
-npm install
-npm run dev            # API :8787 + Vite :5173 (BOTH required)
+cd /root/openagent   # or clone repo
+cp .env.example .env # set LLM_API_KEY, ALLOWED_ORIGINS
+npm install --omit=dev
+pm2 start server/index.js --name openagent-api
+pm2 save
 ```
 
-- Web: http://localhost:5173  
-- API: http://localhost:8787  
-
-**HTTP 404 on chat?** Almost always means only the static UI is running (no API / no proxy). Fix:
+Health check:
 
 ```bash
-npm run dev            # recommended
-# or single process:
-npm run serve          # build + API serves dist on :8787
+curl http://127.0.0.1:8787/api/health
+curl http://YOUR_VPS_IP:8787/api/health
 ```
 
-Do **not** open `dist/index.html` as a file, and do not run bare `vite preview` without API (use `npm run preview` which starts both).
+Open firewall **TCP 8787** (or put nginx/caddy TLS in front on 443).
 
-Production:
+### Env (VPS `.env`)
+
+| Key | Meaning |
+|-----|---------|
+| `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL` | OpenAI-compatible upstream |
+| `PORT` | default `8787` |
+| `ALLOWED_ORIGINS` | e.g. `https://your-app.vercel.app,https://*.vercel.app` |
+| `SERVE_STATIC` | leave `0` / unset |
+| `DAILY_FREE_CREDITS` | default 10 |
+
+## 2) Vercel — frontend only
+
+1. Import GitHub repo `golputin/toaxep` (or this project).
+2. **Framework:** Vite  
+3. **Build:** `npm run build`  
+4. **Output:** `dist`  
+5. **Environment variable (Production):**
+
+```
+VITE_API_BASE=http://YOUR_VPS_IP:8787
+```
+
+Prefer HTTPS API later:
+
+```
+VITE_API_BASE=https://api.yourdomain.com
+```
+
+6. Redeploy after setting `VITE_API_BASE` (Vite bakes it at **build** time).
+
+### Optional `vercel.json`
+
+Already in repo — SPA fallback to `index.html`. No serverless API on Vercel.
+
+## 3) CORS
+
+VPS must allow your Vercel origin. Default allows `https://*.vercel.app` and localhost.
+
+If you use a custom domain on Vercel, add it:
+
+```
+ALLOWED_ORIGINS=https://app.yourdomain.com,https://*.vercel.app
+```
+
+Then `pm2 restart openagent-api`.
+
+## Local dev (optional)
 
 ```bash
-npm run build
-npm start              # serves dist + /api on PORT (default 8787)
+npm run dev
+# web :5173 proxies /api → :8787 — leave VITE_API_BASE empty
 ```
 
 ## Brand
 
-- Token mark: **$OAGT** (`public/token-oagt.svg`) — product credit branding  
-- Mesh background + lime glow UI (not flat black)
-
-## Env
-
-See `.env.example`:
-
-- `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL`
-- `DAILY_FREE_CREDITS` (default 10)
-- `RH_CHAIN_ID`, `TREASURY`, `CREDITS_PER_ETH`
-- `ALLOW_DEMO_TOPUP=1` for local credit grants without chain verify
-
-**Never commit `.env`.**
-
-## Stack
-
-Vite (static UI) · Express · local JSON credit ledger (`data/`) · any OpenAI-compatible chat API
-
-## GitHub
-
-Replaces previous FarmTown / BlockEarn content on this repo.
+- Token mark **$OAGT** — `public/token-oagt.svg`

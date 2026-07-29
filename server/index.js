@@ -29,7 +29,32 @@ const RH_CHAIN_ID = Number(process.env.RH_CHAIN_ID || 4663);
 const TREASURY = process.env.TREASURY || "0x0000000000000000000000000000000000000000";
 const CREDITS_PER_ETH = Number(process.env.CREDITS_PER_ETH || 100000);
 const MIN_TOPUP_ETH = Number(process.env.MIN_TOPUP_ETH || 0.005);
-const SERVE_STATIC = process.env.SERVE_STATIC === "1" || process.env.NODE_ENV === "production";
+// VPS = API only by default. Frontend lives on Vercel.
+// Set SERVE_STATIC=1 only for rare all-in-one local demos.
+const SERVE_STATIC = process.env.SERVE_STATIC === "1";
+
+/** Comma-separated browser origins allowed to call this API (Vercel frontends) */
+const ALLOWED_ORIGINS = String(
+  process.env.ALLOWED_ORIGINS ||
+    "https://*.vercel.app,http://localhost:5173,http://127.0.0.1:5173"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function originAllowed(origin) {
+  if (!origin) return true; // curl / server-to-server
+  for (const rule of ALLOWED_ORIGINS) {
+    if (rule === "*") return true;
+    if (rule === origin) return true;
+    // https://*.vercel.app
+    if (rule.includes("*")) {
+      const re = new RegExp("^" + rule.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+      if (re.test(origin)) return true;
+    }
+  }
+  return false;
+}
 
 fs.mkdirSync(DATA, { recursive: true });
 if (!fs.existsSync(LEDGER)) fs.writeFileSync(LEDGER, "{}");
@@ -185,8 +210,40 @@ const AGENTS = [
 ];
 
 const app = express();
-app.use(cors({ origin: true, exposedHeaders: ["X-Credits-Remaining", "X-Daily-Limit", "X-Purchased-Credits", "X-Credit-Cost"] }));
+app.set("trust proxy", 1);
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (originAllowed(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked origin: ${origin}`));
+    },
+    credentials: false,
+    exposedHeaders: [
+      "X-Credits-Remaining",
+      "X-Daily-Limit",
+      "X-Purchased-Credits",
+      "X-Credit-Cost",
+    ],
+  })
+);
 app.use(express.json({ limit: "1mb" }));
+
+// Friendly root — API only (no SPA)
+app.get("/", (_req, res) => {
+  res.json({
+    service: "openagent-api",
+    ok: true,
+    mode: "api-only",
+    docs: {
+      health: "GET /api/health",
+      agents: "GET /api/agents",
+      credits: "GET /api/v1/credits  (header X-Wallet-Address)",
+      chat: "POST /api/chat",
+      shop: "GET /api/shop",
+    },
+    frontend: "Deploy UI on Vercel; set VITE_API_BASE to this host",
+  });
+});
 
 function walletFrom(req) {
   return normAddr(req.headers["x-wallet-address"] || req.body?.walletAddress || req.query?.wallet);
@@ -424,28 +481,39 @@ app.post("/api/chat", async (req, res) => {
   });
 });
 
-// JSON 404 for unknown API routes (prevents HTML 404 / SPA fallback confusion)
+// JSON 404 for unknown API routes
 app.use("/api", (req, res) => {
   res.status(404).json({
     error: {
       code: "not_found",
-      message: `No API route ${req.method} ${req.originalUrl}. Is the OpenAgent API running on :${PORT}? Try: npm run dev`,
-      hint: "Dev needs both Vite (:5173) and API (:8787). Or: npm run build && npm start",
+      message: `No API route ${req.method} ${req.originalUrl}`,
+      hint: "Frontend should call this VPS API base (VITE_API_BASE). UI is on Vercel — not served here.",
     },
   });
 });
 
-// Static UI (production or SERVE_STATIC=1)
+// Optional static (off by default — Vercel owns the frontend)
 const dist = path.join(ROOT, "dist");
 if (SERVE_STATIC && fs.existsSync(dist)) {
   app.use(express.static(dist));
   app.get("*", (req, res) => {
     res.sendFile(path.join(dist, "index.html"));
   });
+} else {
+  app.use((req, res) => {
+    res.status(404).json({
+      error: {
+        code: "not_found",
+        message: "API-only host. No UI here.",
+        path: req.path,
+        try: "/api/health",
+      },
+    });
+  });
 }
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(
-    `[openagent] api :${PORT} model=${LLM_MODEL} daily=${DAILY} key=${LLM_KEY ? "yes" : "NO"} static=${SERVE_STATIC && fs.existsSync(dist) ? "on" : "off"} root=${ROOT}`
+    `[openagent-api] :${PORT} model=${LLM_MODEL} daily=${DAILY} key=${LLM_KEY ? "yes" : "NO"} static=${SERVE_STATIC ? "on" : "OFF (Vercel frontend)"} cors=${ALLOWED_ORIGINS.join("|")}`
   );
 });
