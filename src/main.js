@@ -212,24 +212,31 @@ async function sendMessage(text) {
       method: "POST",
       body: JSON.stringify({
         agentId: t.agentId || state.agentId,
+        // only send clean turns — never re-send error bubbles to the model
         messages: t.messages
-          .filter((m) => !m.pending)
+          .filter((m) => !m.pending && !m.error)
+          .filter((m) => m.role === "user" || (m.role === "assistant" && !String(m.content).startsWith("⚠️")))
           .map((m) => ({ role: m.role, content: m.content })),
       }),
     });
-    // remove pending
     t.messages = t.messages.filter((m) => !m.pending);
-    t.messages.push({
-      role: "assistant",
-      content: data.message?.content || "(empty)",
-    });
-    if (data.credits) state.credits = {
-      credits_remaining: data.credits.remaining,
-      purchased_credits: data.credits.purchased,
-      daily_limit: data.credits.dailyLimit,
-      credits_used: data.credits.dailyUsed,
-      free_left: data.credits.freeLeft,
-    };
+    const text = data.text || data.message?.content || "(empty)";
+    t.messages.push({ role: "assistant", content: text });
+    if (typeof data.credits === "number") {
+      state.credits = {
+        ...(state.credits || {}),
+        credits_remaining: data.credits,
+        remaining: data.credits,
+      };
+    } else if (data.credits && typeof data.credits === "object") {
+      state.credits = {
+        credits_remaining: data.credits.remaining ?? data.credits.credits_remaining,
+        purchased_credits: data.credits.purchased ?? data.credits.purchased_credits,
+        daily_limit: data.credits.dailyLimit ?? data.credits.daily_limit,
+        credits_used: data.credits.dailyUsed ?? data.credits.credits_used,
+        free_left: data.credits.freeLeft ?? data.credits.free_left,
+      };
+    }
     t.updatedAt = Date.now();
     saveThreads();
   } catch (e) {
@@ -237,7 +244,9 @@ async function sendMessage(text) {
     const msg =
       e.status === 402
         ? e.message + " — open Buy Credits."
-        : e.message || "Chat failed";
+        : e.status === 401
+          ? "Connect wallet to chat."
+          : "Something went wrong. Try again in a moment.";
     t.messages.push({ role: "assistant", content: `⚠️ ${msg}`, error: true });
     saveThreads();
     if (e.status === 402) state.view = "shop";

@@ -22,16 +22,22 @@ const LEDGER = path.join(DATA, "credits.json");
 
 const PORT = Number(process.env.PORT || 8787);
 const DAILY = Number(process.env.DAILY_FREE_CREDITS || 10);
-const LLM_URL = (process.env.LLM_API_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, "");
+const LLM_URL = (process.env.LLM_API_URL || "https://api.inferhub.dev/v1").replace(/\/$/, "");
 const LLM_KEY = process.env.LLM_API_KEY || "";
-const LLM_MODEL = process.env.LLM_MODEL || "z-ai/glm-5.2";
+const LLM_MODEL = process.env.LLM_MODEL || "free/grok/grok-4.5";
+// Public label only — never leak provider/model ids to the browser
+const PUBLIC_MODEL_LABEL = process.env.PUBLIC_MODEL_LABEL || "OpenAgent";
 const RH_CHAIN_ID = Number(process.env.RH_CHAIN_ID || 4663);
 const TREASURY = process.env.TREASURY || "0x0000000000000000000000000000000000000000";
 const CREDITS_PER_ETH = Number(process.env.CREDITS_PER_ETH || 100000);
 const MIN_TOPUP_ETH = Number(process.env.MIN_TOPUP_ETH || 0.005);
 // VPS = API only by default. Frontend lives on Vercel.
-// Set SERVE_STATIC=1 only for rare all-in-one local demos.
 const SERVE_STATIC = process.env.SERVE_STATIC === "1";
+
+// InferHub / some free gateways block bare Node UA (CF 1010) — look like a browser
+const LLM_UA =
+  process.env.LLM_USER_AGENT ||
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 /** Comma-separated browser origins allowed to call this API (Vercel frontends) */
 const ALLOWED_ORIGINS = String(
@@ -253,8 +259,9 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "openagent",
-    model: LLM_MODEL,
-    llmConfigured: Boolean(LLM_KEY),
+    // do not expose real model id / provider
+    model: PUBLIC_MODEL_LABEL,
+    ready: Boolean(LLM_KEY),
     chainId: RH_CHAIN_ID,
     dailyFree: DAILY,
     token: { symbol: "OAGT", name: "OpenAgent" },
@@ -404,8 +411,17 @@ app.post("/api/chat", async (req, res) => {
 
   const userMsgs = messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-    .slice(-20)
-    .map((m) => ({ role: m.role, content: m.content.slice(0, 12000) }));
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 12000) }))
+    // Drop old error/debug bubbles so the model never "roleplays" API 404 text
+    .filter((m) => {
+      if (m.role !== "assistant") return true;
+      const c = m.content.trim();
+      if (c.startsWith("⚠️")) return false;
+      if (/API 404|backend not reached|OpenAgent backend/i.test(c)) return false;
+      if (c === "…" || c === "...") return false;
+      return true;
+    })
+    .slice(-20);
 
   if (!userMsgs.some((m) => m.role === "user")) {
     return res.status(400).json({
@@ -413,9 +429,13 @@ app.post("/api/chat", async (req, res) => {
     });
   }
 
+  const systemExtra =
+    " Never mention API errors, backends, model names, providers, or HTTP status codes. " +
+    "If you lack live market data, say so briefly without inventing prices.";
+
   const payload = {
     model: LLM_MODEL,
-    messages: [{ role: "system", content: agent.system }, ...userMsgs],
+    messages: [{ role: "system", content: agent.system + systemExtra }, ...userMsgs],
     temperature: 0.7,
     max_tokens: 2048,
   };
@@ -426,13 +446,16 @@ app.post("/api/chat", async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
         Authorization: `Bearer ${LLM_KEY}`,
+        "User-Agent": LLM_UA,
       },
       body: JSON.stringify(payload),
     });
   } catch (e) {
+    console.error("[chat] network", e.message);
     return res.status(502).json({
-      error: { code: "upstream", message: e.message || "LLM network error" },
+      error: { code: "upstream", message: "Model temporarily unavailable. Try again." },
     });
   }
 
@@ -445,10 +468,11 @@ app.post("/api/chat", async (req, res) => {
   }
 
   if (!upstream.ok) {
+    console.error("[chat] upstream", upstream.status, raw.slice(0, 200));
     return res.status(502).json({
       error: {
         code: "upstream",
-        message: data?.error?.message || raw.slice(0, 300) || `LLM HTTP ${upstream.status}`,
+        message: "Model temporarily unavailable. Try again.",
       },
     });
   }
@@ -465,19 +489,13 @@ app.post("/api/chat", async (req, res) => {
   saveLedger(ledger);
   const after = balanceOf(u);
 
-  res.setHeader("X-Credits-Remaining", String(after.remaining));
-  res.setHeader("X-Daily-Limit", String(DAILY));
-  res.setHeader("X-Purchased-Credits", String(after.purchased));
-  res.setHeader("X-Credit-Cost", String(cost));
-
+  // Minimal client payload — hide model id, usage, agent plumbing in Network tab
   res.json({
-    id: data?.id || randomUUID(),
-    agentId: agent.id,
-    model: LLM_MODEL,
+    ok: true,
+    text: content,
+    credits: after.remaining,
+    // keep nested message for older clients briefly
     message: { role: "assistant", content },
-    usage: data?.usage || null,
-    credits: after,
-    cost,
   });
 });
 
