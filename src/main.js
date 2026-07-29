@@ -478,6 +478,17 @@ function render() {
           <button type="button" data-view="agents" class="${state.view === "agents" ? "on" : ""}">Explore Agents</button>
           <button type="button" data-view="shop" class="${state.view === "shop" ? "on" : ""}">Buy Credits</button>
         </nav>
+        <div class="side-model">
+          <div class="hist-label">Model</div>
+          <button type="button" class="side-model-btn ${state.modelTier !== "premium" ? "on" : ""}" data-tier="standard">
+            <span>Standard</span>
+            <em>free</em>
+          </button>
+          <button type="button" class="side-model-btn ${state.modelTier === "premium" ? "on premium" : ""} ${canUsePremium() ? "" : "locked"}" data-tier="premium">
+            <span>Claude Opus 5</span>
+            <em>${canUsePremium() ? "top-up" : "🔒"}</em>
+          </button>
+        </div>
         <div class="hist-label">History</div>
         <div class="hist" id="hist"></div>
         <div class="side-foot">
@@ -529,6 +540,9 @@ function render() {
       closeSidebarIfMobile();
       render();
     })
+  );
+  $$(".side-model-btn").forEach((b) =>
+    b.addEventListener("click", () => setModelTier(b.getAttribute("data-tier")))
   );
   $("#btn-connect")?.addEventListener("click", connectWallet);
   $("#btn-connect-side")?.addEventListener("click", connectWallet);
@@ -718,7 +732,7 @@ function renderChat(stage) {
           ? `<div class="hero" id="hero">
               <img class="hero-token" src="/logo-hood-512.png" width="88" height="88" alt="$HOOD" />
               <h1>How can I help you today?</h1>
-              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · model <b>${state.modelTier === "premium" ? "Claude Opus 5" : "Standard"}</b> · ${agent?.creditCost ?? 1}+ cr · <b>$HOOD</b></p>
+              <p class="muted">Agent: <b>${escapeHtml(agent?.name || "General")}</b> · <b>${state.modelTier === "premium" ? "Claude Opus 5" : "Standard"}</b>${canUsePremium() ? "" : " · Opus 🔒 top-up"} · ${agent?.creditCost ?? 1}+ cr</p>
               <div class="suggestions">
                 <button type="button" data-sug="Summarize the risks of wallet-gated AI credit systems.">Credit system risks</button>
                 <button type="button" data-sug="Write a sharp product brief for an on-chain agent marketplace.">Agent marketplace brief</button>
@@ -733,9 +747,23 @@ function renderChat(stage) {
         }" ${state.wallet ? "" : "disabled"}></textarea>
         <div class="composer-bar">
           <button type="button" class="chip" id="chip-agent">${escapeHtml(agent?.name || "Agent")}</button>
-          <button type="button" class="chip ${state.modelTier === "premium" ? "chip-premium" : ""}" id="chip-model" title="${canUsePremium() ? "Toggle model" : "Top up to unlock Claude Opus 5"}">
-            ${state.modelTier === "premium" ? "Claude Opus 5" : "Standard"}
-          </button>
+          <div class="model-picker" id="model-picker">
+            <button type="button" class="chip model-trigger ${state.modelTier === "premium" ? "chip-premium" : ""}" id="chip-model" aria-haspopup="listbox" aria-expanded="false">
+              <span class="model-dot ${state.modelTier === "premium" ? "on" : ""}"></span>
+              <span class="model-label">${state.modelTier === "premium" ? "Claude Opus 5" : "Standard"}</span>
+              <span class="model-caret">▾</span>
+            </button>
+            <div class="model-menu" id="model-menu" hidden role="listbox">
+              <button type="button" class="model-opt ${state.modelTier !== "premium" ? "on" : ""}" data-tier="standard" role="option">
+                <strong>Standard</strong>
+                <span>Free daily credits · default desk</span>
+              </button>
+              <button type="button" class="model-opt ${state.modelTier === "premium" ? "on" : ""} ${canUsePremium() ? "" : "locked"}" data-tier="premium" role="option">
+                <strong>Claude Opus 5 ${canUsePremium() ? "" : "🔒"}</strong>
+                <span>${canUsePremium() ? "Top-up model · +2 credits / turn" : "Unlock with ETH top-up"}</span>
+              </button>
+            </div>
+          </div>
           <div class="grow"></div>
           <button type="submit" class="btn primary" id="btn-send" ${
             !state.wallet || state.busy ? "disabled" : ""
@@ -748,10 +776,38 @@ function renderChat(stage) {
     state.view = "agents";
     render();
   });
-  $("#chip-model")?.addEventListener("click", () => {
-    if (state.modelTier === "premium") setModelTier("standard");
-    else setModelTier("premium");
+  const modelBtn = $("#chip-model");
+  const modelMenu = $("#model-menu");
+  modelBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = modelMenu?.hasAttribute("hidden");
+    if (open) {
+      modelMenu.removeAttribute("hidden");
+      modelBtn.setAttribute("aria-expanded", "true");
+    } else {
+      modelMenu?.setAttribute("hidden", "");
+      modelBtn?.setAttribute("aria-expanded", "false");
+    }
   });
+  $$(".model-opt").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setModelTier(b.getAttribute("data-tier"));
+    })
+  );
+  // close menu on outside click (one-shot)
+  if (modelMenu && !modelMenu.hasAttribute("hidden")) {
+    setTimeout(() => {
+      const closer = (ev) => {
+        if (!$("#model-picker")?.contains(ev.target)) {
+          modelMenu.setAttribute("hidden", "");
+          modelBtn?.setAttribute("aria-expanded", "false");
+          document.removeEventListener("click", closer);
+        }
+      };
+      document.addEventListener("click", closer);
+    }, 0);
+  }
   $$("[data-sug]").forEach((b) =>
     b.addEventListener("click", () => sendMessage(b.getAttribute("data-sug")))
   );
