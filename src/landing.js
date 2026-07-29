@@ -276,8 +276,6 @@ export function renderLanding(root) {
         <div>
           <b>Network</b>
           <span>Robinhood Chain</span>
-          <span>Live top-up</span>
-          <span>API on VPS</span>
         </div>
         <div>
           <b>Credits</b>
@@ -285,7 +283,7 @@ export function renderLanding(root) {
           <span>Not financial advice</span>
         </div>
       </div>
-      <p class="lp-copy">© ${new Date().getFullYear()} HoodAgent · Live</p>
+      <p class="lp-copy">© ${new Date().getFullYear()} HoodAgent</p>
     </footer>
   </div>`;
 
