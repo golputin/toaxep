@@ -1,0 +1,66 @@
+{
+  "packCid": "bafybeiednj4bo2poeixdabrfwuzku32c473s2lp75rex7kwez5xo33r2pq",
+  "pack": "ipfs://bafybeiednj4bo2poeixdabrfwuzku32c473s2lp75rex7kwez5xo33r2pq",
+  "files": {
+    "logo.png": {
+      "cid": "bafybeifuakoqz4je7i5cajdcsfm5qpagj33ar7gfbcct34bijgwgl6nhgq",
+      "ipfs": "ipfs://bafybeifuakoqz4je7i5cajdcsfm5qpagj33ar7gfbcct34bijgwgl6nhgq",
+      "gateways": [
+        "https://ipfs.io/ipfs/bafybeifuakoqz4je7i5cajdcsfm5qpagj33ar7gfbcct34bijgwgl6nhgq",
+        "https://dweb.link/ipfs/bafybeifuakoqz4je7i5cajdcsfm5qpagj33ar7gfbcct34bijgwgl6nhgq",
+        "https://w3s.link/ipfs/bafybeifuakoqz4je7i5cajdcsfm5qpagj33ar7gfbcct34bijgwgl6nhgq",
+        "https://cloudflare-ipfs.com/ipfs/bafybeifuakoqz4je7i5cajdcsfm5qpagj33ar7gfbcct34bijgwgl6nhgq"
+      ]
+    },
+    "avatar.png": {
+      "cid": "bafybeiayxwwxzf5b72rpvypbwctl4qqm2rpgdqcd5t7dwib4o2aogiflmi",
+      "ipfs": "ipfs://bafybeiayxwwxzf5b72rpvypbwctl4qqm2rpgdqcd5t7dwib4o2aogiflmi",
+      "gateways": [
+        "https://ipfs.io/ipfs/bafybeiayxwwxzf5b72rpvypbwctl4qqm2rpgdqcd5t7dwib4o2aogiflmi",
+        "https://dweb.link/ipfs/bafybeiayxwwxzf5b72rpvypbwctl4qqm2rpgdqcd5t7dwib4o2aogiflmi",
+        "https://w3s.link/ipfs/bafybeiayxwwxzf5b72rpvypbwctl4qqm2rpgdqcd5t7dwib4o2aogiflmi",
+        "https://cloudflare-ipfs.com/ipfs/bafybeiayxwwxzf5b72rpvypbwctl4qqm2rpgdqcd5t7dwib4o2aogiflmi"
+      ]
+    },
+    "launch-post.png": {
+      "cid": "bafkreifeuhvsxfadsaxtx2x4mf2k2p6z4suw6ole6gpgss3yox6dj4bs5u",
+      "ipfs": "ipfs://bafkreifeuhvsxfadsaxtx2x4mf2k2p6z4suw6ole6gpgss3yox6dj4bs5u",
+      "gateways": [
+        "https://ipfs.io/ipfs/bafkreifeuhvsxfadsaxtx2x4mf2k2p6z4suw6ole6gpgss3yox6dj4bs5u",
+        "https://dweb.link/ipfs/bafkreifeuhvsxfadsaxtx2x4mf2k2p6z4suw6ole6gpgss3yox6dj4bs5u",
+        "https://w3s.link/ipfs/bafkreifeuhvsxfadsaxtx2x4mf2k2p6z4suw6ole6gpgss3yox6dj4bs5u",
+        "https://cloudflare-ipfs.com/ipfs/bafkreifeuhvsxfadsaxtx2x4mf2k2p6z4suw6ole6gpgss3yox6dj4bs5u"
+      ]
+    },
+    "tweet-card.png": {
+      "cid": "bafkreidqqjvjcoa42bfax5tdcm7v6ckmjb3ppxo2dlmkfyhlyj64evtmki",
+      "ipfs": "ipfs://bafkreidqqjvjcoa42bfax5tdcm7v6ckmjb3ppxo2dlmkfyhlyj64evtmki",
+      "gateways": [
+        "https://ipfs.io/ipfs/bafkreidqqjvjcoa42bfax5tdcm7v6ckmjb3ppxo2dlmkfyhlyj64evtmki",
+        "https://dweb.link/ipfs/bafkreidqqjvjcoa42bfax5tdcm7v6ckmjb3ppxo2dlmkfyhlyj64evtmki",
+        "https://w3s.link/ipfs/bafkreidqqjvjcoa42bfax5tdcm7v6ckmjb3ppxo2dlmkfyhlyj64evtmki",
+        "https://cloudflare-ipfs.com/ipfs/bafkreidqqjvjcoa42bfax5tdcm7v6ckmjb3ppxo2dlmkfyhlyj64evtmki"
+      ]
+    },
+    "header.png": {
+      "cid": "bafkreibxykfwefsvq75jfe4tok2w2y7thb5tt2xttjwgbp6na3yicq36zy",
+      "ipfs": "ipfs://bafkreibxykfwefsvq75jfe4tok2w2y7thb5tt2xttjwgbp6na3yicq36zy",
+      "gateways": [
+        "https://ipfs.io/ipfs/bafkreibxykfwefsvq75jfe4tok2w2y7thb5tt2xttjwgbp6na3yicq36zy",
+        "https://dweb.link/ipfs/bafkreibxykfwefsvq75jfe4tok2w2y7thb5tt2xttjwgbp6na3yicq36zy",
+        "https://w3s.link/ipfs/bafkreibxykfwefsvq75jfe4tok2w2y7thb5tt2xttjwgbp6na3yicq36zy",
+        "https://cloudflare-ipfs.com/ipfs/bafkreibxykfwefsvq75jfe4tok2w2y7thb5tt2xttjwgbp6na3yicq36zy"
+      ]
+    },
+    "teaser.mp4": {
+      "cid": "bafkreidxipkg3jwac2ku7kqpqqdkelw2wtekdzyzrfpeb36nikqqcfhesi",
+      "ipfs": "ipfs://bafkreidxipkg3jwac2ku7kqpqqdkelw2wtekdzyzrfpeb36nikqqcfhesi",
+      "gateways": [
+        "https://ipfs.io/ipfs/bafkreidxipkg3jwac2ku7kqpqqdkelw2wtekdzyzrfpeb36nikqqcfhesi",
+        "https://dweb.link/ipfs/bafkreidxipkg3jwac2ku7kqpqqdkelw2wtekdzyzrfpeb36nikqqcfhesi",
+        "https://w3s.link/ipfs/bafkreidxipkg3jwac2ku7kqpqqdkelw2wtekdzyzrfpeb36nikqqcfhesi",
+        "https://cloudflare-ipfs.com/ipfs/bafkreidxipkg3jwac2ku7kqpqqdkelw2wtekdzyzrfpeb36nikqqcfhesi"
+      ]
+    }
+  }
+}
