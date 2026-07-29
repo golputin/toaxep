@@ -22,7 +22,8 @@ function apiUrl(path) {
 
 const state = {
   wallet: localStorage.getItem("oa_wallet") || null,
-  sidebarOpen: true,
+  // Desktop: open. Phone: closed drawer so chat isn't covered.
+  sidebarOpen: typeof window !== "undefined" ? window.innerWidth > 800 : true,
   view: "chat", // chat | agents | shop
   agentId: localStorage.getItem("oa_agent") || "general",
   agents: AGENTS_FALLBACK,
@@ -34,6 +35,16 @@ const state = {
   previewDismissed: localStorage.getItem("oa_preview_dismissed") === "1",
   apiBase: API_BASE || "(same-origin / vite proxy)",
 };
+
+function isMobile() {
+  return typeof window !== "undefined" && window.innerWidth <= 800;
+}
+
+function closeSidebarIfMobile() {
+  if (isMobile() && state.sidebarOpen) {
+    state.sidebarOpen = false;
+  }
+}
 
 function loadThreads() {
   try {
@@ -304,17 +315,18 @@ function render() {
     </div>
     <div class="bg-noise" aria-hidden="true"></div>
     <div class="shell ${state.sidebarOpen ? "" : "collapsed"}">
-      <aside class="sidebar">
+      <div class="sidebar-backdrop" id="sidebar-backdrop" ${state.sidebarOpen ? "" : "hidden"}></div>
+      <aside class="sidebar" id="sidebar">
         <div class="brand">
-          <a href="/" class="brand-home" title="Marketing site" style="display:contents;color:inherit;text-decoration:none">
-          <div class="brand-mark"><img src="/token-oagt.svg" alt="$OAGT" width="36" height="36" /></div>
-          <div>
-            <strong>OpenAgent</strong>
-            <small>wallet · credits · agents</small>
-            <span class="token-chip">$OAGT</span>
-          </div>
+          <a href="/" class="brand-home" title="Marketing site">
+            <div class="brand-mark"><img src="/token-oagt.svg" alt="$OAGT" width="36" height="36" /></div>
+            <div class="brand-text">
+              <strong>OpenAgent</strong>
+              <small>wallet · credits · agents</small>
+              <span class="token-chip">$OAGT</span>
+            </div>
           </a>
-          <button type="button" class="icon-btn" id="btn-collapse" title="Collapse">‹</button>
+          <button type="button" class="icon-btn" id="btn-collapse" title="Close menu" aria-label="Close menu">‹</button>
         </div>
         <button type="button" class="btn primary block" id="btn-new">+ New Chat</button>
         <nav class="nav">
@@ -334,13 +346,14 @@ function render() {
       </aside>
       <main class="main">
         <header class="top">
-          <button type="button" class="icon-btn mobile-only" id="btn-menu">☰</button>
+          <button type="button" class="icon-btn mobile-only" id="btn-menu" aria-label="Open menu">☰</button>
+          <div class="top-title mobile-only">OpenAgent</div>
           <div class="grow"></div>
           <div class="credits-pill" id="credits-pill">—</div>
           ${
             state.wallet
-              ? `<button type="button" class="btn" id="btn-top-disc">${shortAddr(state.wallet)}</button>`
-              : `<button type="button" class="btn primary" id="btn-connect">Connect Wallet</button>`
+              ? `<button type="button" class="btn top-wallet" id="btn-top-disc">${shortAddr(state.wallet)}</button>`
+              : `<button type="button" class="btn primary top-wallet" id="btn-connect">Connect</button>`
           }
         </header>
         <div class="stage" id="stage"></div>
@@ -357,13 +370,19 @@ function render() {
     state.sidebarOpen = !state.sidebarOpen;
     render();
   });
+  $("#sidebar-backdrop")?.addEventListener("click", () => {
+    state.sidebarOpen = false;
+    render();
+  });
   $("#btn-new")?.addEventListener("click", () => {
     state.view = "chat";
+    closeSidebarIfMobile();
     newThread();
   });
   $$("[data-view]").forEach((b) =>
     b.addEventListener("click", () => {
       state.view = b.getAttribute("data-view");
+      closeSidebarIfMobile();
       render();
     })
   );
@@ -400,6 +419,7 @@ function renderHist() {
     b.addEventListener("click", () => {
       state.activeThread = b.getAttribute("data-tid");
       state.view = "chat";
+      closeSidebarIfMobile();
       render();
     })
   );
