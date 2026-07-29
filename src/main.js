@@ -1,5 +1,6 @@
 import "./style.css";
 import { AGENTS_FALLBACK } from "./agents.js";
+import { shouldShowApp, renderLanding } from "./landing.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -292,6 +293,8 @@ function scrollChat() {
 
 // ——— render ———
 function render() {
+  document.documentElement.classList.remove("landing-mode");
+  document.body.classList.remove("landing-mode");
   const app = $("#app");
   app.innerHTML = `
     <div class="bg-root" aria-hidden="true">
@@ -303,12 +306,14 @@ function render() {
     <div class="shell ${state.sidebarOpen ? "" : "collapsed"}">
       <aside class="sidebar">
         <div class="brand">
+          <a href="/" class="brand-home" title="Marketing site" style="display:contents;color:inherit;text-decoration:none">
           <div class="brand-mark"><img src="/token-oagt.svg" alt="$OAGT" width="36" height="36" /></div>
           <div>
             <strong>OpenAgent</strong>
             <small>wallet · credits · agents</small>
             <span class="token-chip">$OAGT</span>
           </div>
+          </a>
           <button type="button" class="icon-btn" id="btn-collapse" title="Collapse">‹</button>
         </div>
         <button type="button" class="btn primary block" id="btn-new">+ New Chat</button>
@@ -612,14 +617,29 @@ function escapeHtml(s) {
 
 // boot
 (async function boot() {
+  const app = document.querySelector("#app");
+  if (!app) return;
+
+  // Marketing landing at /  · product at /app or app.* host
+  if (!shouldShowApp()) {
+    renderLanding(app);
+    // SPA back/forward between / and /app
+    window.addEventListener("popstate", () => {
+      if (shouldShowApp()) location.reload();
+    });
+    return;
+  }
+
+  // normalize bare /app → keep path for refresh
+  document.title = "OpenAgent — App";
+
   await Promise.all([loadAgents(), loadShop()]);
   if (state.wallet) await refreshCredits();
   if (!state.activeThread && state.threads[0]) state.activeThread = state.threads[0].id;
   render();
-  // health
   api("/api/health")
     .then((h) => {
-      if (!h.llmConfigured) toast("Server: LLM key missing — chat will fail");
+      if (h && h.ready === false) toast("Server not ready — chat may fail");
     })
-    .catch(() => toast("API offline — run npm run dev"));
+    .catch(() => toast("API offline — check VPS / proxy"));
 })();

@@ -8,6 +8,14 @@
       "destination": "http://104.245.34.139:8787/api/:path*"
     },
     {
+      "source": "/app",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }

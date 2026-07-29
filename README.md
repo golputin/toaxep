@@ -12,6 +12,23 @@ Browser  →  Vercel (static UI)
 
 **Do not** host the SPA on the VPS. **Do not** put `LLM_API_KEY` in Vercel.
 
+
+## Landing + App routes
+
+| URL | What |
+|-----|------|
+| `/` | Marketing landing (Opentroy-style) |
+| `/app` | Wallet chat product |
+| `app.openagent.xyz` | Same as app (hostname forces product) |
+| `openagent.xyz` | Marketing (after you buy domain → point to Vercel) |
+
+CTA buttons use relative `/app` by default. Override with:
+
+```
+VITE_APP_URL=https://app.openagent.xyz
+```
+
+
 ## 1) VPS — API only
 
 ```bash

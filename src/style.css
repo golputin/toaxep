@@ -24,6 +24,12 @@ html, body {
   background: var(--bg);
   overflow: hidden;
 }
+html.landing-mode,
+body.landing-mode {
+  overflow: auto;
+  height: auto;
+  min-height: 100%;
+}
 button, textarea, input { font: inherit; color: inherit; }
 
 #app {
